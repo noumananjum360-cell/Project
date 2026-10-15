@@ -52,7 +52,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1fr_24rem]">
+      <div className="mt-6 grid items-start gap-6 xl:grid-cols-[1fr_24rem]">
         <Card>
           <CardHeader title="Activity over the last 30 days" />
           <div className="h-72 p-4">

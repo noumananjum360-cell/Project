@@ -1,0 +1,71 @@
+# BidGenie AI — local / single-host stack.
+#   cp .env.example .env    (then edit secrets)
+#   docker compose -f infra/docker-compose.yml --env-file .env up -d --build
+name: bidgenie
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bidgenie}
+      POSTGRES_USER: ${POSTGRES_USER:-bidgenie}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    build: &backend-build
+      context: ../backend
+      secrets: [extra_ca]
+    command: ["alembic", "upgrade", "head"]
+    env_file: ../.env
+    environment: &backend-env
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-bidgenie}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-bidgenie}
+      CHROMA_PERSIST_DIRECTORY: /data/chroma
+      FAISS_INDEX_DIRECTORY: /data/faiss
+      UPLOAD_DIRECTORY: /data/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    build: *backend-build
+    env_file: ../.env
+    environment: *backend-env
+    volumes:
+      - backend-data:/data   # persistent ChromaDB vectors (+ optional uploads)
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../frontend
+      secrets: [extra_ca]
+    environment:
+      BACKEND_UPSTREAM: http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  backend-data:
+
+secrets:
+  # Optional: CA bundle for TLS-intercepting proxies during image builds.
+  extra_ca:
+    file: ${EXTRA_CA_FILE:-/dev/null}
