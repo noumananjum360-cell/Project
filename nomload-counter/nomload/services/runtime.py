@@ -83,8 +83,9 @@ class BayRuntime(threading.Thread):
             if s:
                 s.stop()
         with self._lock:
-            if self.recorder:
-                self.recorder.close()
+            rec, self.recorder = self.recorder, None
+            if rec:
+                rec.close()
 
     def _resume_session(self):
         """App restarted during a session: continue counting into the same session."""
@@ -165,6 +166,17 @@ class BayRuntime(threading.Thread):
 
     # ------------------------------------------------------------------ loop
     def run(self):
+        try:
+            self._run()
+        except Exception:
+            log.exception("bay %s runtime crashed", self.bay.name)
+            self.status.update(online=False, message="Processing error - see log")
+            self.listener.frame(self.bay.id, None, dict(self.status))
+            for s in (self.src, self.plate_src):
+                if s:
+                    s.stop()
+
+    def _run(self):
         if self.src is None:
             self.status["message"] = "No counting camera configured for this bay"
             self.listener.frame(self.bay.id, None, dict(self.status))

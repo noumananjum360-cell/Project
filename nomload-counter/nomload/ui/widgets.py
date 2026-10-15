@@ -209,6 +209,10 @@ class VideoView(QLabel):
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
+        # never taller than the 16:9 picture: the space goes to the counter panel instead
+        mh = max(self.minimumHeight(), int(self.width() * 9 / 16))
+        if self.maximumHeight() != mh:
+            self.setMaximumHeight(mh)
         self._refresh()
 
     def mouseDoubleClickEvent(self, e):
@@ -232,7 +236,7 @@ class Toast(QFrame):
         fg = "#1B2A4E" if sev == "warning" else "#FFFFFF"
         self.setStyleSheet(f"QFrame {{ background:{bg}; border-radius:10px; }} QLabel {{ color:{fg}; }}")
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(14, 8, 8, 8)
+        lay.setContentsMargins(12, 4, 6, 4)
         ic = QLabel()
         ic.setPixmap(icons.pixmap("bell", fg, 22))
         lay.addWidget(ic)
@@ -243,8 +247,8 @@ class Toast(QFrame):
         ok.setStyleSheet(f"background: rgba(255,255,255,0.85); color:#1B2A4E; border:none; font-weight:600;")
         ok.clicked.connect(lambda: (self.acknowledged.emit(alert.get("id", 0)), self.deleteLater()))
         lay.addWidget(ok)
-        if sev == "info":
-            QTimer.singleShot(8000, self.deleteLater)
+        if sev != "critical":
+            QTimer.singleShot(8000 if sev == "info" else 20000, self.deleteLater)
 
 
 def make_table(headers: list[str], stretch_col: int | None = None) -> QTableWidget:
@@ -330,3 +334,84 @@ def rounded_pixmap(pm: QPixmap, radius: int = 8) -> QPixmap:
     p.drawPixmap(0, 0, pm)
     p.end()
     return out
+
+
+# ----------------------------------------------------------------- responsiveness helpers
+class _AsyncBridge(QFrame):
+    done = Signal(object)
+    failed = Signal(str)
+
+
+_ASYNC_JOBS: set = set()
+
+
+def run_async(parent, fn, on_done=None, on_error=None, busy: str | None = None):
+    """Run ``fn()`` in a worker thread; call ``on_done(result)`` on the UI thread.
+
+    Keeps the window responsive during slow work (camera connections, reports,
+    model loading). Shows a small busy dialog when ``busy`` is given.
+    """
+    import threading
+
+    from PySide6.QtWidgets import QProgressDialog
+    bridge = _AsyncBridge()
+    _ASYNC_JOBS.add(bridge)
+    dlg = None
+    if busy:
+        dlg = QProgressDialog(busy, None, 0, 0, parent)
+        dlg.setWindowTitle("NomLoad")
+        dlg.setCancelButton(None)
+        dlg.setMinimumDuration(300)
+        dlg.setWindowModality(Qt.WindowModality.WindowModal)
+
+    def finish():
+        if dlg is not None:
+            dlg.close()
+            dlg.deleteLater()
+        _ASYNC_JOBS.discard(bridge)
+        bridge.deleteLater()
+
+    def ok(res):
+        finish()
+        if on_done:
+            on_done(res)
+
+    def bad(msg):
+        finish()
+        if on_error:
+            on_error(msg)
+        else:
+            error(parent, msg)
+
+    bridge.done.connect(ok)
+    bridge.failed.connect(bad)
+
+    def work():
+        try:
+            bridge.done.emit(fn())
+        except Exception as e:  # shown to the user
+            import logging
+            logging.getLogger(__name__).exception("background task failed")
+            bridge.failed.emit(str(e))
+
+    threading.Thread(target=work, daemon=True, name="ui-task").start()
+
+
+def fit_to_screen(w: QWidget, width: int, height: int):
+    """Size a dialog to (width, height) but never larger than 92% of the screen."""
+    from PySide6.QtGui import QGuiApplication
+    scr = (w.screen() or QGuiApplication.primaryScreen()).availableGeometry()
+    w.resize(min(width, int(scr.width() * 0.92)), min(height, int(scr.height() * 0.9)))
+
+
+def scroll_wrap(page: QWidget) -> QWidget:
+    """Wrap a page so it scrolls instead of being clipped on small screens."""
+    from PySide6.QtWidgets import QScrollArea
+    sc = QScrollArea()
+    sc.setWidgetResizable(True)
+    sc.setFrameShape(QFrame.Shape.NoFrame)
+    sc.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+    sc.setWidget(page)
+    sc.setObjectName("PageScroll")
+    sc.page = page
+    return sc

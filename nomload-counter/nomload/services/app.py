@@ -100,13 +100,16 @@ class AppServices:
             self.runtimes[bay.id] = rt
             rt.start()
 
-    def stop_bays(self):
-        for rt in self.runtimes.values():
-            rt.shutdown()
-        for rt in self.runtimes.values():
-            rt.join(timeout=3)
+    def stop_bays(self, wait: float = 0.0):
+        """Signal every bay to stop. Threads are daemons; ``wait`` > 0 joins them (used on exit)."""
+        rts = list(self.runtimes.values())
         self.runtimes.clear()
+        for rt in rts:
+            rt.shutdown()
+        if wait:
+            for rt in rts:
+                rt.join(timeout=wait)
 
     def shutdown(self):
-        self.stop_bays()
+        self.stop_bays(wait=2.0)
         self.alerts.stop()

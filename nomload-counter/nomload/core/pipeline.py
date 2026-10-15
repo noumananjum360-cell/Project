@@ -168,7 +168,8 @@ class CountingEngine:
                 (tw, tht), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, fs, 1)
                 cv2.rectangle(img, (x0, y0 - tht - 4), (x0 + tw + 4, y0), col, -1)
                 cv2.putText(img, label, (x0 + 2, y0 - 3), cv2.FONT_HERSHEY_SIMPLEX, fs, (255, 255, 255), 1, cv2.LINE_AA)
-        for d in res.detections:
+        trucks = sorted((d for d in res.detections if d.cls == "truck"), key=lambda d: -d.score)[:1]
+        for d in trucks:
             if d.cls == "truck":
                 cv2.rectangle(img, (int(d.x0), int(d.y0)), (int(d.x1), int(d.y1)), CLASS_COLORS["truck"], 1, cv2.LINE_AA)
         # count flashes (+1 / -1)

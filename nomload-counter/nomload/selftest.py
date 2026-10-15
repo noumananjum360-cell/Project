@@ -113,8 +113,16 @@ def run_selftest(report_path: str | None = None) -> int:
         sid = rt.start_session(app.user, gid)
         rt.start()
         t0 = time.time()
-        while not rt.src.ended and time.time() - t0 < 600:
+        last, last_t = -1, time.time()
+        while not rt.src.ended:
             time.sleep(0.5)
+            if rt.src.frames_read != last:
+                last, last_t = rt.src.frames_read, time.time()
+            if not rt.is_alive():
+                raise RuntimeError("bay processing thread stopped unexpectedly")
+            if time.time() - last_t > 60 or time.time() - t0 > 900:
+                rt.shutdown()
+                raise RuntimeError(f"video processing stalled after {rt.src.frames_read} frames")
         time.sleep(1.5)
         s = rt.close_session(app.user)
         rt.shutdown()

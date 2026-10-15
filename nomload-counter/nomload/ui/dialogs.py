@@ -303,7 +303,9 @@ class ReviewDialog(Base):
     """Supervisor review of low-confidence counts with snapshots."""
 
     def __init__(self, parent, app, session_id: int, supervisor: User):
-        super().__init__(parent, "Review low-confidence counts", 900)
+        super().__init__(parent, "Review low-confidence counts", 600)
+        from nomload.ui.widgets import fit_to_screen
+        fit_to_screen(self, 980, 720)
         self.app = app
         self.sid = session_id
         self.sup = supervisor
@@ -436,9 +438,10 @@ class SessionResultDialog(QDialog):
 
     def _certificate(self):
         from nomload.ui.pages.common import open_file, report_path
+        from nomload.ui.widgets import run_async
         p = report_path(f"certificate_session_{self.s.id}.pdf")
-        self.app.reports.loading_certificate(self.s.id, p)
-        open_file(p)
+        run_async(self, lambda: self.app.reports.loading_certificate(self.s.id, p), lambda _r: open_file(p),
+                  busy=_("Creating certificate..."))
 
     def _review(self):
         if self.sound:

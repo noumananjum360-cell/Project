@@ -4,7 +4,7 @@ from __future__ import annotations
 import time
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import (QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QLabel, QProgressBar, QPushButton,
+from PySide6.QtWidgets import (QSizePolicy, QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QLabel, QProgressBar, QPushButton,
                                QRadioButton, QVBoxLayout, QWidget)
 
 from nomload import theme
@@ -49,6 +49,8 @@ class BayWidget(QFrame):
         self.fps = QLabel("")
         self.fps.setObjectName("Muted")
         h.addWidget(self.fps)
+        for pill in (self.cam_pill, self.truck_pill, self.tamper_pill):
+            pill.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         lay.addLayout(h)
         self.video = VideoView()
         self.video.double_clicked.connect(lambda: page.focus_bay(self))
@@ -128,12 +130,16 @@ class BayWidget(QFrame):
             lay.addLayout(body, 1)
         else:
             # several bays side by side: video on top, compact two-column panel below
+            self.video.setMinimumSize(240, 135)
             lay.addWidget(self.video, 1)
+            self.count_lbl.setStyleSheet("font-size: 36px;")
+            self.exp_lbl.setStyleSheet(f"font-size: 22px; color: {theme.c('muted')}; font-weight: 600;")
+            self.status_lbl.setMinimumWidth(130)
+            h.insertWidget(1, self.status_lbl)
             info = QHBoxLayout()
             info.setSpacing(16)
             left = QVBoxLayout()
-            left.setSpacing(6)
-            left.addWidget(self.status_lbl)
+            left.setSpacing(4)
             left.addLayout(cnt)
             left.addWidget(self.progress)
             left.addWidget(self.review_lbl)
@@ -151,6 +157,7 @@ class BayWidget(QFrame):
             btns.addWidget(self.close_btn, 2)
             btns.addLayout(small, 3)
             lay.addLayout(btns)
+            lay.addStretch(0)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.tick)
         self.timer.start(1000)
@@ -174,7 +181,7 @@ class BayWidget(QFrame):
             b.setVisible(active)
         if not active:
             self.summary = None
-            self.status_lbl.setText(_("IDLE - no truck loading"))
+            self.status_lbl.setText(_("IDLE") if self.page.compact else _("IDLE - no truck loading"))
             self.status_lbl.setStyleSheet(f"background:{theme.c('surface_alt')}; color:{theme.c('muted')}; "
                                           "border-radius:8px; padding:6px; font-weight:700;")
             self.count_lbl.setText("0")
@@ -360,10 +367,15 @@ class LiveBaysPage(QWidget):
         self.focus_btn.hide()
         lay.addWidget(self.header)
         self.grid_host = QWidget()
+        self.grid_host.setObjectName("Page")
         self.grid = QGridLayout(self.grid_host)
         self.grid.setContentsMargins(0, 0, 0, 0)
         self.grid.setSpacing(14)
-        lay.addWidget(self.grid_host, 1)
+        from nomload.ui.widgets import scroll_wrap
+        self.scroll = scroll_wrap(self.grid_host)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        lay.addWidget(self.scroll, 1)
+        self._cols = 0
         self.empty = QLabel()
         self.empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.empty.setObjectName("Muted")
@@ -405,10 +417,28 @@ class LiveBaysPage(QWidget):
         ws = [self.focused] if self.focused else list(self.widgets.values())
         for w in self.widgets.values():
             w.setVisible(w in ws)
-        cols = 1 if len(ws) <= 1 else 2
+        cols = self._columns(len(ws))
+        self._cols = cols
+        rows = (len(ws) + cols - 1) // max(1, cols)
+        avail = self.scroll.viewport().height()
         for i, w in enumerate(ws):
+            # fill the screen when everything fits; otherwise keep a usable size and scroll
+            w.setMinimumHeight(max(430, (avail - 14 * (rows - 1)) // rows) if rows > 1 else min(380, avail))
             self.grid.addWidget(w, i // cols, i % cols)
         self.focus_btn.setVisible(self.focused is not None)
+
+    def _columns(self, n: int) -> int:
+        if n <= 1:
+            return 1
+        w = self.scroll.viewport().width() or self.width()
+        if w >= 2400 and n >= 3:
+            return 3
+        return 2 if w >= 900 else 1
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if self.widgets:
+            self._layout()
 
     def focus_bay(self, w):
         self.focused = None if (w is None or self.focused is w) else w

@@ -17,8 +17,8 @@ from nomload.core.geometry import CountGeometry
 from nomload.core.video import BRANDS, SourceSpec, list_usb_cameras, mask_url, rtsp_url, test_connection
 from nomload.i18n import _
 from nomload.ui.dialogs import Base
-from nomload.ui.widgets import (Card, PageHeader, bgr_to_qimage, button, confirm, error, fill_table, info, make_table,
-                                selected_data)
+from nomload.ui.widgets import (Card, PageHeader, bgr_to_qimage, button, confirm, error, fill_table, fit_to_screen, info,
+                                make_table, run_async, selected_data)
 
 
 # ======================================================================= calibration canvas
@@ -164,16 +164,14 @@ class CalibCanvas(QWidget):
 
 
 class CalibrationDialog(QDialog):
-    def __init__(self, parent, app, cam):
+    def __init__(self, parent, app, cam, grabbed: tuple):
         super().__init__(parent)
         self.app = app
         self.cam = cam
         self.setWindowTitle(f"{_('Calibrate')} - {cam.name}")
-        self.resize(1200, 820)
+        fit_to_screen(self, 1200, 820)
         lay = QVBoxLayout(self)
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-        ok, frame, msg = test_connection(cam.source, 8)
-        QApplication.restoreOverrideCursor()
+        ok, frame, msg = grabbed
         if not ok:
             frame = cam.reference if cam.reference is not None else np.full((360, 640, 3), 40, np.uint8)
             lay.addWidget(QLabel(f"⚠ {_('Could not grab a live frame')}: {msg}"))
@@ -204,6 +202,7 @@ class CalibrationDialog(QDialog):
         hint.setObjectName("Muted")
         lay.addWidget(hint)
         self.canvas = CalibCanvas(frame, self.geo)
+        self.canvas.setMinimumSize(480, 270)
         lay.addWidget(self.canvas, 1)
         row = QHBoxLayout()
         row.addWidget(QLabel(_("Line tolerance band")))
@@ -367,9 +366,9 @@ class CameraDialog(Base):
                                       self.port.value(), self.channel.value(), self.sub.isChecked()))
 
     def _scan(self):
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-        found = list_usb_cameras()
-        QApplication.restoreOverrideCursor()
+        run_async(self, list_usb_cameras, self._scanned, busy=_("Looking for USB cameras..."))
+
+    def _scanned(self, found):
         self.usb.clear()
         self.usb.addItems([str(i) for i in found] or ["0"])
         self.test_msg.setText(f"{len(found)} {_('USB camera(s) found')}")
@@ -388,11 +387,12 @@ class CameraDialog(Base):
         return SourceSpec("file", self.file.text().strip(), self.loop.isChecked())
 
     def test(self):
-        self.test_msg.setText(_("Connecting..."))
-        QApplication.processEvents()
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-        ok, frame, msg = test_connection(self.spec(), 8)
-        QApplication.restoreOverrideCursor()
+        self.test_msg.setText(_("Connecting... (up to 10 seconds)"))
+        self.test_msg.setStyleSheet("")
+        run_async(self, lambda sp=self.spec(): test_connection(sp, 8), self._tested)
+
+    def _tested(self, res):
+        ok, frame, msg = res
         self.test_msg.setText(("✔ " if ok else "✖ ") + msg)
         self.test_msg.setStyleSheet(f"color:{theme.c('success') if ok else theme.c('danger')}; font-weight:600;")
         if ok:
@@ -546,8 +546,14 @@ class CamerasPage(QWidget):
 
     def calibrate(self):
         c = self._cam()
-        if c and CalibrationDialog(self, self.app, c).exec():
-            self.load_bays()
+        if not c:
+            return
+
+        def opened(grabbed):
+            if CalibrationDialog(self, self.app, c, grabbed).exec():
+                self.load_bays()
+
+        run_async(self, lambda: test_connection(c.source, 8), opened, busy=_("Getting a live frame from the camera..."))
 
     def disable_cam(self):
         c = self._cam()
@@ -557,4 +563,4 @@ class CamerasPage(QWidget):
 
     def restart(self):
         self.main.restart_bays()
-        info(self, _("Bays restarted with the new camera settings."))
+        self.main.toast({"severity": "info", "title": _("Cameras"), "message": _("Bays restarted with the new settings.")})

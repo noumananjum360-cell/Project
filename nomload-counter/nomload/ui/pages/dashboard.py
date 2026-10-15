@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget
 
 from nomload import theme
@@ -19,6 +20,7 @@ class DashboardPage(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         sc = QScrollArea()
         sc.setWidgetResizable(True)
+        sc.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         outer.addWidget(sc)
         host = QWidget()
         host.setObjectName("Page")
@@ -30,15 +32,15 @@ class DashboardPage(QWidget):
         rb = hdr.add(button("Refresh"))
         rb.clicked.connect(self.refresh)
         lay.addWidget(hdr)
-        k = QHBoxLayout()
+        k = QGridLayout()
         k.setSpacing(14)
+        self.kpi_grid = k
         self.k_trucks = KpiCard("Trucks loaded today")
         self.k_units = KpiCard("Units dispatched today")
         self.k_mism = KpiCard("Mismatches today")
         self.k_avg = KpiCard("Avg loading time")
         self.k_active = KpiCard("Loading now")
-        for w in (self.k_trucks, self.k_units, self.k_mism, self.k_avg, self.k_active):
-            k.addWidget(w)
+        self.kpis = [self.k_trucks, self.k_units, self.k_mism, self.k_avg, self.k_active]
         lay.addLayout(k)
         g = QGridLayout()
         g.setSpacing(14)
@@ -58,10 +60,10 @@ class DashboardPage(QWidget):
         c4 = Card("Busiest hours (trucks started, 7 days)")
         self.ch_hours = BarChart()
         c4.lay.addWidget(self.ch_hours)
-        g.addWidget(c1, 0, 0)
-        g.addWidget(c2, 0, 1)
-        g.addWidget(c3, 1, 0)
-        g.addWidget(c4, 1, 1)
+        self.chart_grid = g
+        self.chart_cards = [c1, c2, c3, c4]
+        self._chart_cols = 0
+        self._reflow()
         lay.addLayout(g)
         self.ins = Card("Insights")
         self.ins_lbl = QLabel()
@@ -72,6 +74,28 @@ class DashboardPage(QWidget):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.refresh)
         self.timer.start(30000)
+
+    def _reflow(self):
+        """2x2 charts and 5 KPI tiles in a row on wide screens; stacked on narrow ones."""
+        w = self.width() or 1400
+        cols = 2 if w >= 1000 else 1
+        kcols = 5 if w >= 1000 else 3
+        if (cols, kcols) == self._chart_cols:
+            return
+        self._chart_cols = (cols, kcols)
+        for c in self.chart_cards:
+            self.chart_grid.removeWidget(c)
+        for i, c in enumerate(self.chart_cards):
+            self.chart_grid.addWidget(c, i // cols, i % cols)
+        if hasattr(self, "kpis"):
+            for c in self.kpis:
+                self.kpi_grid.removeWidget(c)
+            for i, c in enumerate(self.kpis):
+                self.kpi_grid.addWidget(c, i // kcols, i % kcols)
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._reflow()
 
     def showEvent(self, e):
         super().showEvent(e)

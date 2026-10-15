@@ -36,8 +36,10 @@ class MainWindow(QMainWindow):
         self.app = app
         self.setWindowTitle(f"{APP_NAME} {__version__}")
         self.setWindowIcon(QIcon(str(assets_dir() / "app.ico")))
-        self.resize(1440, 900)
-        self.setMinimumSize(1100, 700)
+        from nomload.ui.widgets import fit_to_screen
+        fit_to_screen(self, 1440, 900)
+        self.setMinimumSize(960, 600)
+        self._compact = None
         self.bridge = QtBridge()
         self.sound = SoundPlayer(app.settings, self)
         app.alerts.listeners.append(self.bridge.on_alert)
@@ -80,6 +82,8 @@ class MainWindow(QMainWindow):
         side = QFrame()
         side.setObjectName("Sidebar")
         side.setFixedWidth(270)
+        self.side = side
+        self._side_texts: list = []  # (widget, full text) restored when the sidebar expands
         sl = QVBoxLayout(side)
         sl.setContentsMargins(14, 22, 14, 14)
         sl.setSpacing(4)
@@ -95,6 +99,7 @@ class MainWindow(QMainWindow):
         s.setObjectName("BrandSub")
         bt.addWidget(n)
         bt.addWidget(s)
+        self._side_hide = [n, s]
         brand.addLayout(bt)
         brand.addStretch(1)
         sl.addLayout(brand)
@@ -103,6 +108,7 @@ class MainWindow(QMainWindow):
         self.stack.setObjectName("Content")
         self.nav_group = QButtonGroup(self)
         self.pages = {}
+        self.containers = {}
         self.nav_buttons = {}
         from nomload.ui.pages.cameras import CamerasPage
         from nomload.ui.pages.dashboard import DashboardPage
@@ -129,8 +135,13 @@ class MainWindow(QMainWindow):
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             sl.addWidget(b)
             page = classes[key](self)
-            idx = self.stack.addWidget(page)
+            from nomload.ui.widgets import scroll_wrap
+            box = page if key in ("dashboard", "settings", "live") else scroll_wrap(page)
+            idx = self.stack.addWidget(box)
             self.pages[key] = page
+            self.containers[key] = box
+            b.setToolTip(_(label))
+            self._side_texts.append((b, "  " + _(label)))
             self.nav_buttons[key] = b
             self.nav_group.addButton(b, idx)
         self.nav_group.idClicked.connect(self.stack.setCurrentIndex)
@@ -141,6 +152,7 @@ class MainWindow(QMainWindow):
         ur.setObjectName("UserRole")
         sl.addWidget(un)
         sl.addWidget(ur)
+        self._side_hide += [un, ur]
         sl.addSpacing(10)
         for text, ic, fn in ((_("Appearance"), "moon", self.toggle_theme),
                              (_("Change password"), "lock", self.change_password),
@@ -151,7 +163,16 @@ class MainWindow(QMainWindow):
             b.setIconSize(QSize(16, 16))
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.clicked.connect(fn)
+            b.setToolTip(text)
+            self._side_texts.append((b, "  " + text))
             sl.addWidget(b)
+        tg = QPushButton()
+        tg.setObjectName("Link")
+        tg.setToolTip(_("Collapse / expand menu"))
+        tg.setCursor(Qt.CursorShape.PointingHandCursor)
+        tg.clicked.connect(lambda: self._set_compact(not self._compact, manual=True))
+        self.side_toggle = tg
+        sl.addWidget(tg)
         h.addWidget(side)
         right = QWidget()
         right.setObjectName("Content")
@@ -169,11 +190,39 @@ class MainWindow(QMainWindow):
         self.root.setCurrentWidget(shell)
         start = "live" if "live" in self.pages and u.role == "clerk" else "dashboard"
         self.go(start)
+        self._manual_compact = None
+        self._compact = None
+        self._set_compact(self.width() < 1440)
 
     def go(self, key: str):
         if key in self.pages:
             self.nav_buttons[key].setChecked(True)
-            self.stack.setCurrentWidget(self.pages[key])
+            self.stack.setCurrentWidget(self.containers[key])
+
+    def current_key(self) -> str:
+        w = self.stack.currentWidget()
+        return next((k for k, c in self.containers.items() if c is w), "dashboard")
+
+    def _set_compact(self, compact: bool, manual: bool = False):
+        """Icon-only sidebar on small screens (or when the user collapses it)."""
+        if self.shell is None:
+            return
+        if manual:
+            self._manual_compact = compact
+        if compact == self._compact:
+            return
+        self._compact = compact
+        self.side.setFixedWidth(78 if compact else 270)
+        for w in self._side_hide:
+            w.setVisible(not compact)
+        for b, text in self._side_texts:
+            b.setText("" if compact else text)
+        self.side_toggle.setText("  »" if compact else "  «  " + _("Collapse menu"))
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if self.shell is not None and getattr(self, "_manual_compact", None) is None:
+            self._set_compact(self.width() < 1440)
 
     # ------------------------------------------------------------- login / logout
     def _logged_in(self, user):
@@ -211,7 +260,7 @@ class MainWindow(QMainWindow):
         self.app.settings.set("theme", new)
         icons._render.cache_clear()
         QApplication.instance().setStyleSheet(theme.stylesheet())
-        current = next((k for k, p in self.pages.items() if p is self.stack.currentWidget()), "dashboard")
+        current = self.current_key()
         self._build_shell()
         if "live" in self.pages:
             self.pages["live"].rebuild()
@@ -227,8 +276,8 @@ class MainWindow(QMainWindow):
         self.refresh_status()
 
     def reload_models_and_bays(self):
-        self.app.load_models()
-        self.restart_bays()
+        from nomload.ui.widgets import run_async
+        run_async(self, self.app.load_models, lambda _r: self.restart_bays(), busy=_("Reloading AI models..."))
 
     # ------------------------------------------------------------- alerts & status
     def toast(self, alert: dict):
@@ -237,12 +286,16 @@ class MainWindow(QMainWindow):
         t = Toast(alert)
         t.acknowledged.connect(lambda aid: aid and self.app.alerts.acknowledge(aid, self.app.user))
         self.toasts.insertWidget(0, t)
-        while self.toasts.count() > 3:
+        while self.toasts.count() > 2:
             w = self.toasts.itemAt(self.toasts.count() - 1).widget()
             self.toasts.removeWidget(w)
             w.deleteLater()
 
     def _on_alert(self, alert: dict):
+        if alert["kind"] == "low_confidence":
+            # shown on the bay panel ("needs review") and in the review queue - no banner spam
+            self.refresh_status()
+            return
         if alert["kind"] in ("cleared", "session_released"):
             self.refresh_status()
             return

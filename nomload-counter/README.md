@@ -59,6 +59,12 @@ Login ─► Live Bays ─► Start loading (gate pass) ─► camera counts eve
 
 ## Quick start (from source)
 
+**Easiest:** install Python 3.11 (64-bit, tick *Add python.exe to PATH*), then double-click
+**`START_NOMLOAD.bat`**. The first start installs everything into `.venv` (a few minutes); later starts
+open the app directly. If something goes wrong the window stays open and shows the error.
+
+Manual alternative:
+
 ```bat
 :: Windows, Python 3.11 x64
 python -m venv .venv
@@ -89,6 +95,7 @@ different folder.
 
 ```
 nomload-counter/
+├─ START_NOMLOAD.bat          double-click to install (first time) and start from source
 ├─ run.py                     start the app (python run.py | NomLoad.exe --selftest)
 ├─ nomload/
 │  ├─ app.py                  entry point, splash, self-test switch
@@ -303,10 +310,9 @@ customers.
 
 Requirements: Windows 10/11 x64, Python 3.11 x64, and [Inno Setup 6](https://jrsoftware.org/isinfo.php).
 
-```bat
-python tools\keygen.py init        :: once, see Licensing
-build\build_windows.bat
-```
+Double-click **`build\build_windows.bat`** (or run it from a Command Prompt). The window stays open
+at the end and on any error, so you can read what happened. If no licensing key pair exists yet it
+creates one for you (`tools\keygen.py init`) and reminds you to back up the private key.
 
 The script:
 
@@ -317,6 +323,17 @@ The script:
 5. **self-tests the packaged exe** (`dist\NomLoad\NomLoad.exe --selftest`); the installer is only built if
    every check passes
 6. compiles `build\installer.iss` → `dist\installer\NomLoadCounter_Setup_1.0.0.exe`
+   (if Inno Setup is not installed you still get the ready-to-run program in `dist\NomLoad\NomLoad.exe`)
+
+**Build troubleshooting**
+
+| Message | Fix |
+|---|---|
+| `Python was not found` | Install Python 3.11 64-bit and tick *Add python.exe to PATH*, then open a new window. |
+| `Package installation failed` | The first build downloads packages, so the PC needs internet once. Re-run. |
+| `Tests failed` | Read the failing test name above the message; run `.venv-build\Scripts\python -m pytest -q tests` to see details. |
+| `Self-test failed` | `dist\selftest_report.txt` lists the failing check. |
+| Inno Setup warning | Install Inno Setup 6 and run the script again. |
 
 The self-test runs in a throw-away data folder and covers the database and integrity triggers,
 login/PIN, licensing, model loading, plate OCR on the sample plate video, a **full loading session
@@ -356,7 +373,17 @@ per product.
 Accuracy of the bundled starter model on the sample videos (`python tools/evaluate.py`, all frames
 analysed):
 
-<!-- ACCURACY_TABLE -->
+| Sample video | Scene | True net count | Counted | Accuracy |
+|---|---|---|---|---|
+| flour_mill_bay.mp4 | bags on head / shoulder / back, pauses on the line, one bag carried back | 25 | 24 | 96.0 % |
+| fmcg_cartons_bay.mp4 | stacked cartons in arms, trolleys with 4-6 shrink packs | 72 | 70 | 97.2 % |
+| beverage_conveyor_bay.mp4 | belt conveyor + crates/cartons in arms and on trolleys | 90 | 80 | 88.9 % |
+| mixed_busy_bay.mp4 | crowded: several labourers crossing together, mixed products | 52 | 52 | 92.3 % |
+
+Overall: 239 items, 17 counting errors (92.9 %). About 3 % of counts were flagged for supervisor review (mostly items that appeared from behind a
+labourer right on the line). Processing ran at 150-180 frames/s per video on a 4-core CPU
+(about 4 ms per inference), far above the 15-25 fps a camera delivers.
+The weakest case is cartons tightly stacked on trolleys; site training improves it most.
 
 These numbers measure the whole pipeline (detector + tracker + counter) on synthetic footage. Real-site
 accuracy depends on camera placement and on training with the site's own frames. Always validate on
@@ -366,6 +393,13 @@ the video and an `answer_key.csv` into a folder and run `tools/evaluate.py --fol
 ---
 
 ## Performance tuning
+
+The window never waits for slow work: cameras, AI and recording run in one thread per bay, and camera
+tests, calibration frames, reports, evidence packs, model loading and training run in background
+threads with a small "working..." indicator. The layout adapts to the screen: the sidebar collapses to
+icons below 1440 px width (click « / » to toggle), several bays are shown side by side and every page
+scrolls instead of being cut off on 1366×768 gate PCs.
+
 
 *Settings → Performance*:
 

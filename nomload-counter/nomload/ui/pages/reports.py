@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (QDateEdit, QFileDialog, QGridLayout, QHBoxLayout,
 from nomload.i18n import _
 from nomload.services.reports import fmt_ts
 from nomload.ui.pages.common import open_file, report_path
-from nomload.ui.widgets import Card, PageHeader, button, error, fill_table, make_table
+from nomload.ui.widgets import Card, PageHeader, button, error, fill_table, make_table, run_async
 
 
 def _date(days_back=0):
@@ -123,14 +123,13 @@ class ReportsPage(QWidget):
                                  r["details"][:240]] for r in rows])
 
     def _run(self, fn, path):
-        try:
-            fn(path)
-        except Exception as e:
-            error(self, f"{_('Report failed')}: {e}")
-            return
-        from nomload.services.context import audit
-        audit(self.app.db, self.app.user, "report_generated", "report", path.name)
-        open_file(path)
+        def done(_r):
+            from nomload.services.context import audit
+            audit(self.app.db, self.app.user, "report_generated", "report", path.name)
+            open_file(path)
+
+        run_async(self, lambda: fn(path), done, lambda m: error(self, f"{_('Report failed')}: {m}"),
+                  busy=_("Creating report..."))
 
     def cert(self):
         sid = self.cert_id.value()

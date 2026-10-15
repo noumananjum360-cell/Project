@@ -159,8 +159,11 @@ class LineCounter:
         score = t.mean_score
         length = min(1.0, t.hits / 8.0)
         conf = score * (0.55 + 0.45 * length)
-        if uncertain:
+        if force_flag:
             conf *= 0.6
+        elif uncertain:
+            # brief occlusion (labourer's arm/body) recovered by position: normal, slightly less certain
+            conf *= 0.85
         conf = round(max(0.0, min(1.0, conf)), 3)
         flagged = force_flag or conf < self.cfg.review_threshold
         if flagged and not reason:

@@ -17,7 +17,8 @@ from nomload.services import evidence
 from nomload.services.reports import STATUS_LABEL, fmt_dur, fmt_ts
 from nomload.ui.dialogs import ReviewDialog, SessionResultDialog, ask_supervisor
 from nomload.ui.pages.common import open_file, open_folder, report_path
-from nomload.ui.widgets import (Card, PageHeader, button, confirm, error, fill_table, info, make_table, selected_data)
+from nomload.ui.widgets import (Card, PageHeader, button, confirm, error, fill_table, fit_to_screen, info, make_table,
+                                run_async, selected_data)
 
 
 def status_color(s: str) -> str:
@@ -122,7 +123,7 @@ class SessionDetailDialog(QDialog):
         self.sid = sid
         self.main = main
         self.setWindowTitle(f"{_('Session')} #{sid}")
-        self.resize(1100, 760)
+        fit_to_screen(self, 1100, 760)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(20, 16, 20, 16)
         self.head = QLabel()
@@ -249,7 +250,10 @@ class SessionDetailDialog(QDialog):
             open_file(self.s.clip_path)
 
     def verify(self):
-        res = evidence.verify_session(self.app.db, self.sid)
+        run_async(self, lambda: evidence.verify_session(self.app.db, self.sid), self._verified,
+                  busy=_("Checking evidence files (SHA-256)..."))
+
+    def _verified(self, res):
         rows, colors = [], {}
         for i, r in enumerate(res):
             rows.append([r["kind"], Path(r["path"]).name, r["sha256"][:24] + "…", r["status"].upper()])
@@ -270,16 +274,22 @@ class SessionDetailDialog(QDialog):
         if not p:
             return
         pdf = report_path(f"certificate_session_{self.sid}.pdf")
-        self.app.reports.loading_certificate(self.sid, pdf)
-        evidence.build_evidence_pack(self.app.db, self.sid, p, pdf)
-        from nomload.services.context import audit
-        audit(self.app.db, self.app.user, "evidence_pack_exported", "session", self.sid, {"path": p})
-        open_folder(p)
+
+        def work():
+            self.app.reports.loading_certificate(self.sid, pdf)
+            return evidence.build_evidence_pack(self.app.db, self.sid, p, pdf)
+
+        def done(_r):
+            from nomload.services.context import audit
+            audit(self.app.db, self.app.user, "evidence_pack_exported", "session", self.sid, {"path": p})
+            open_folder(p)
+
+        run_async(self, work, done, busy=_("Building evidence pack..."))
 
     def cert(self):
         p = report_path(f"certificate_session_{self.sid}.pdf")
-        self.app.reports.loading_certificate(self.sid, p)
-        open_file(p)
+        run_async(self, lambda: self.app.reports.loading_certificate(self.sid, p), lambda _r: open_file(p),
+                  busy=_("Creating certificate..."))
 
     def review(self):
         sup, _r = ask_supervisor(self, self.app, _("Review low-confidence counts"))

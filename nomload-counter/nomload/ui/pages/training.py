@@ -440,13 +440,14 @@ class TrainingPage(QWidget):
         info(self, f"{n} {_('frames added. Next: Annotate.')}")
 
     def synthetic(self):
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-        try:
-            n = add_synthetic(self.ds, self.n_syn.value())
-        finally:
-            QApplication.restoreOverrideCursor()
-        self.update_stats()
-        info(self, f"{n} {_('synthetic frames added with labels.')}")
+        from nomload.ui.widgets import run_async
+        ds, n = self.ds, self.n_syn.value()
+
+        def done(k):
+            self.update_stats()
+            info(self, f"{k} {_('synthetic frames added with labels.')}")
+
+        run_async(self, lambda: add_synthetic(ds, n), done, busy=_("Rendering synthetic loading scenes..."))
 
     # ------------------------------------------------------------- annotate
     def reload_images(self):
@@ -614,11 +615,11 @@ class TrainingPage(QWidget):
         fill_table(self.models, rows, [m["path"] for m in ms])
 
     def _activate(self, path):
-        try:
-            det = self.app.activate_model(path, self.app.user)
-        except Exception as e:
-            error(self, f"{_('Model could not be loaded')}: {e}")
-            return
+        from nomload.ui.widgets import run_async
+        run_async(self, lambda: self.app.activate_model(path, self.app.user), self._activated,
+                  lambda m: error(self, f"{_('Model could not be loaded')}: {m}"), busy=_("Loading model..."))
+
+    def _activated(self, det):
         info(self, f"{_('Active model')}: {det.name}\n{_('Classes')}: {', '.join(det.classes)}\n"
                    f"{_('All bays now use this model (no restart needed).')}")
         self.reload_models()

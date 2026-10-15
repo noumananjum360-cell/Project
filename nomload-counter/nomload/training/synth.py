@@ -305,11 +305,12 @@ class Scene:
         boxes = list(self.static_boxes)
         if self.conveyor_y is not None:
             cy = int(self.conveyor_y)
-            cv2.rectangle(img, (150, cy - 4), (self.line_x + 70, cy + 6), (50, 50, 55), -1)
+            belt_img = img
+            cv2.rectangle(belt_img, (150, cy - 4), (self.line_x + 70, cy + 6), (50, 50, 55), -1)
             for k in range(150, self.line_x + 70, 16):
                 off = int((t * 70) % 16)
-                cv2.line(img, (k + off, cy - 4), (k + off, cy + 6), (80, 80, 85), 1)
-            cv2.rectangle(img, (150, cy + 6), (self.line_x + 70, cy + 30), (90, 90, 95), -1)
+                cv2.line(belt_img, (k + off, cy - 4), (k + off, cy + 6), (80, 80, 85), 1)
+            cv2.rectangle(belt_img, (150, cy + 6), (self.line_x + 70, cy + 30), (90, 90, 95), -1)
         active = []
         for tr in self.trips:
             x = tr.x_at(t)
@@ -382,7 +383,10 @@ def build_scene(seed: int, duration: float = 45.0, recipe: str = "mixed", line_x
     t = 0.5
     conveyor_y = None
     if recipe == "conveyor":
-        conveyor_y = 215.0
+        # belt in the foreground (closest to the camera) so labourers never hide it
+        conveyor_y = 338.0
+        lanes = [240, 262, 285, 305]
+        lane_free = {y: 0.0 for y in lanes}
     while t < duration - 6:
         lane = rng.choice(lanes)
         start = max(t, lane_free[lane])
@@ -504,7 +508,8 @@ def write_plate_video(path: Path, seed: int, plate_text: str, province: str, fps
     vw.release()
 
 
-def training_samples(n: int, seed: int = 1000, classes: list[str] | None = None):
+def training_samples(n: int, seed: int = 1000, classes: list[str] | None = None, recipes: list[str] | None = None,
+                     density: tuple[float, float] = (0.8, 1.6)):
     """Yield (frame_bgr, [(class_idx, x0, y0, x1, y1), ...]) for detector training."""
     from nomload.core.plate_formats import random_plate
     classes = classes or DEFAULT_CLASSES
@@ -526,8 +531,9 @@ def training_samples(n: int, seed: int = 1000, classes: list[str] | None = None)
                 continue
         else:
             if scene is None or rng.random() < 0.05:
-                scene = build_scene(rng.randint(0, 10**6), duration=40, recipe="random",
-                                    truck=rng.random() < 0.85, density=rng.uniform(0.8, 1.6))
+                scene = build_scene(rng.randint(0, 10**6), duration=40,
+                                    recipe=rng.choice(recipes) if recipes else "random",
+                                    truck=rng.random() < 0.85, density=rng.uniform(*density))
             img, boxes = scene.render(rng.uniform(0, scene.duration), np.random.default_rng(rng.randint(0, 10**6)))
         labels = [(classes.index(c), *b) for c, b in boxes if c in classes]
         yield img, labels

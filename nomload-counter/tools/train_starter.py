@@ -31,10 +31,21 @@ def main():
     ap.add_argument("--lr", type=float, default=2e-3)
     ap.add_argument("--out", default=str(ROOT / "models" / "starter_detector.onnx"))
     ap.add_argument("--resume", default="")
+    ap.add_argument("--seed", type=int, default=12345)
+    ap.add_argument("--hard", action="store_true", help="emphasise crowded / conveyor scenes")
+    ap.add_argument("--recipes", default="", help="comma separated scene recipes, e.g. conveyor,cartons")
     args = ap.parse_args()
 
     t0 = time.time()
-    samples = list(training_samples(args.samples, seed=12345))
+    if args.recipes:
+        samples = list(training_samples(args.samples, seed=args.seed, recipes=args.recipes.split(","),
+                                        density=(1.0, 1.8)))
+    elif args.hard:
+        samples = list(training_samples(args.samples, seed=args.seed,
+                                        recipes=["conveyor", "conveyor", "mixed", "mixed", "cartons", "bags"],
+                                        density=(1.0, 2.0)))
+    else:
+        samples = list(training_samples(args.samples, seed=args.seed))
     print(f"generated {len(samples)} samples in {time.time() - t0:.0f}s", flush=True)
     net = CenterNetLite(DEFAULT_CLASSES, (192, 320), seed=0)
     if args.resume:
@@ -44,7 +55,7 @@ def main():
 
     def progress(i, n, loss, el):
         print(f"iter {i}/{n} loss {loss:.4f} elapsed {el:.0f}s", flush=True)
-        if i % 500 == 0:
+        if i % 500 == 1 and i > 1:
             net.to_onnx(str(ckpt), {"name": "NomLoad starter (checkpoint)"})
 
     train(net, samples, TrainConfig(iterations=args.iterations, batch=args.batch, lr=args.lr), progress)
