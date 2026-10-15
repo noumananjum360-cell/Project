@@ -1,0 +1,12 @@
+video,product,class,true_in,true_out,true_net
+flour_mill_bay.mp4,Flour 50kg bag,bag,26,1,25
+fmcg_cartons_bay.mp4,Carton 1.5L x6,carton,40,0,40
+fmcg_cartons_bay.mp4,Shrink pack 500ml x12,pack,32,0,32
+beverage_conveyor_bay.mp4,Beverage crate x24,crate,26,1,25
+beverage_conveyor_bay.mp4,Carton 1.5L x6,carton,44,1,43
+beverage_conveyor_bay.mp4,Flour 50kg bag,bag,12,0,12
+beverage_conveyor_bay.mp4,Shrink pack 500ml x12,pack,10,0,10
+mixed_busy_bay.mp4,Beverage crate x24,crate,6,0,6
+mixed_busy_bay.mp4,Carton 1.5L x6,carton,15,0,15
+mixed_busy_bay.mp4,Shrink pack 500ml x12,pack,12,0,12
+mixed_busy_bay.mp4,Urea 50kg bag,bag,21,2,19

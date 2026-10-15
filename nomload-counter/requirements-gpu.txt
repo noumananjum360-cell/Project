@@ -1,0 +1,4 @@
+# Optional: GPU acceleration on Windows via DirectML (NVIDIA, AMD and Intel GPUs).
+# Install INSTEAD of the onnxruntime line in requirements.txt:
+#   pip uninstall -y onnxruntime && pip install -r requirements-gpu.txt
+onnxruntime-directml==1.19.2

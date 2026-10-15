@@ -1,0 +1,4 @@
+gate_pass,vehicle,customer,driver,phone,destination,product,quantity
+GP-1001,LES-4721,Al-Madina Traders,Aslam,0300-1234567,Multan,Flour 50kg bag,25
+GP-1002,TLA-552,City Distributors,Rafiq,,Hyderabad,Carton 1.5L x6,40
+GP-1002,TLA-552,City Distributors,Rafiq,,Hyderabad,Shrink pack 500ml x12,32

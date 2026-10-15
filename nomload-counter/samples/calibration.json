@@ -1,0 +1,50 @@
+{
+  "flour_mill_bay.mp4": {
+    "mode": "line",
+    "p1": [
+      0.6875,
+      0.12
+    ],
+    "p2": [
+      0.6875,
+      0.99
+    ],
+    "in_side": 1
+  },
+  "fmcg_cartons_bay.mp4": {
+    "mode": "line",
+    "p1": [
+      0.6875,
+      0.12
+    ],
+    "p2": [
+      0.6875,
+      0.99
+    ],
+    "in_side": 1
+  },
+  "beverage_conveyor_bay.mp4": {
+    "mode": "line",
+    "p1": [
+      0.6875,
+      0.12
+    ],
+    "p2": [
+      0.6875,
+      0.99
+    ],
+    "in_side": 1
+  },
+  "mixed_busy_bay.mp4": {
+    "mode": "line",
+    "p1": [
+      0.6875,
+      0.12
+    ],
+    "p2": [
+      0.6875,
+      0.99
+    ],
+    "in_side": 1
+  }
+}

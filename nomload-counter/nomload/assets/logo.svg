@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- NomLoad Counter mark: viewfinder brackets (Devnom family) around a counted stack of cartons -->
+  <g fill="none" stroke="#1B2A4E" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M36 84 V54 Q36 36 54 36 H84"/>
+    <path d="M172 36 H202 Q220 36 220 54 V84"/>
+    <path d="M220 172 V202 Q220 220 202 220 H172"/>
+    <path d="M84 220 H54 Q36 220 36 202 V172"/>
+  </g>
+  <g>
+    <!-- bottom row -->
+    <rect x="66" y="148" width="38" height="30" rx="5" fill="#1B2A4E"/>
+    <rect x="109" y="148" width="38" height="30" rx="5" fill="#1B2A4E"/>
+    <rect x="152" y="148" width="38" height="30" rx="5" fill="#1B2A4E"/>
+    <!-- middle row -->
+    <rect x="87.5" y="113" width="38" height="30" rx="5" fill="#1B2A4E"/>
+    <rect x="130.5" y="113" width="38" height="30" rx="5" fill="#1B2A4E"/>
+    <!-- top: the item being counted -->
+    <rect x="109" y="78" width="38" height="30" rx="5" fill="#E8A33D"/>
+    <!-- carton tape -->
+    <g fill="#3E5A94">
+      <rect x="82" y="148" width="6" height="30"/>
+      <rect x="125" y="148" width="6" height="30"/>
+      <rect x="168" y="148" width="6" height="30"/>
+      <rect x="103.5" y="113" width="6" height="30"/>
+      <rect x="146.5" y="113" width="6" height="30"/>
+    </g>
+    <rect x="125" y="78" width="6" height="30" fill="#F6C878"/>
+  </g>
+</svg>
