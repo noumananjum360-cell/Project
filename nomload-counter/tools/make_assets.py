@@ -3,7 +3,8 @@ import os
 import sys
 from pathlib import Path
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+if os.name != "nt":  # Windows renders off-screen natively with its system fonts
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -25,7 +26,8 @@ def render(size: int, bg=None) -> QImage:
 
 
 def main():
-    app = QGuiApplication(sys.argv)  # noqa: F841
+    from nomload.training.qt_render import ensure_qt
+    ensure_qt()  # also registers system fonts when Qt has none (offscreen builds)
     render(512).save(str(A / "logo.png"))
     render(128).save(str(A / "logo_128.png"))
     # Windows icon: white rounded tile so it reads on dark taskbars

@@ -6,7 +6,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+if os.name != "nt":  # Windows renders off-screen natively and keeps its system fonts
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 @pytest.fixture()

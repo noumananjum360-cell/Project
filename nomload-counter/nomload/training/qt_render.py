@@ -8,12 +8,45 @@ import numpy as np
 _app = None
 
 
+_fonts_loaded = False
+
+
+def _load_system_fonts():
+    """Qt's offscreen/minimal platforms only look in PySide6/lib/fonts, which pip wheels leave
+    empty on Windows. Register the fonts installed on the PC so plates render with real text."""
+    global _fonts_loaded
+    if _fonts_loaded:
+        return
+    _fonts_loaded = True
+    from pathlib import Path
+
+    from PySide6.QtGui import QFontDatabase
+    dirs = []
+    if os.name == "nt":
+        dirs.append(Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts")
+    else:
+        dirs += [Path("/usr/share/fonts"), Path.home() / ".fonts"]
+    wanted = ("arial", "calibri", "segoeui", "tahoma", "verdana", "dejavusans", "liberationsans", "freesans")
+    for d in dirs:
+        if not d.is_dir():
+            continue
+        for f in d.rglob("*.ttf"):
+            if f.stem.lower().replace("-", "").startswith(wanted):
+                QFontDatabase.addApplicationFont(str(f))
+
+
 def ensure_qt():
     global _app
     from PySide6.QtGui import QGuiApplication
     if QGuiApplication.instance() is None:
-        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        # Windows can render off-screen with its native platform (system fonts available);
+        # elsewhere (servers/CI) use the offscreen platform.
+        if os.name != "nt":
+            os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         _app = QGuiApplication([])
+    from PySide6.QtGui import QFontDatabase
+    if os.environ.get("QT_QPA_PLATFORM") in ("offscreen", "minimal") or not QFontDatabase.families():
+        _load_system_fonts()
     return QGuiApplication.instance()
 
 
@@ -25,8 +58,10 @@ def available_fonts() -> list[str]:
     ensure_qt()
     from PySide6.QtGui import QFontDatabase
     have = set(QFontDatabase.families())
+    if not have:
+        raise RuntimeError("No fonts available to Qt - cannot render plates")
     fams = [f for f in FONT_FAMILIES if f in have]
-    return fams or [sorted(have)[0]] if have else ["Sans"]
+    return fams or [sorted(have)[0]]
 
 
 def qimage_to_bgr(img) -> np.ndarray:

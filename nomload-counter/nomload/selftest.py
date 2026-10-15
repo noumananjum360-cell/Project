@@ -19,7 +19,8 @@ from pathlib import Path
 def run_selftest(report_path: str | None = None) -> int:
     tmp = tempfile.mkdtemp(prefix="nomload_selftest_")
     os.environ["NOMLOAD_HOME"] = tmp
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    if os.name != "nt":  # Windows renders off-screen natively with its system fonts
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     results: list[tuple[str, bool, str]] = []
     t_start = time.time()
 
