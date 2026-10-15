@@ -44,7 +44,8 @@ def stylesheet() -> str:
     return f"""
     * {{ font-family: "{f['family']}", {f['fallback']}; font-size: {base}px; color: {p['text']}; }}
     QMainWindow, QDialog, #Content {{ background: {p['bg']}; }}
-    QWidget#Page {{ background: {p['bg']}; }}
+    QWidget#Page, QWidget#DialogBody {{ background: {p['bg']}; }}
+    QFrame#DialogFooter {{ background: {p['surface']}; }}
     #Sidebar {{ background: {p['sidebar']}; border-right: 1px solid {p['border']}; }}
     #Sidebar QLabel#BrandName {{ font-size: 20px; font-weight: 700; color: {p['primary'] if _MODE == 'light' else p['text']}; }}
     #Sidebar QLabel#BrandSub {{ color: {p['muted']}; font-size: 14px; }}

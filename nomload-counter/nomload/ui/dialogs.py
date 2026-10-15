@@ -17,29 +17,68 @@ from nomload.ui.widgets import button, error, fill_table, make_table
 
 
 class Base(QDialog):
+    """Dialog with a scrollable body and a footer that always stays visible.
+
+    Content is added to ``self.lay`` (inside a scroll area); ``buttons()`` puts
+    Cancel/OK in the fixed footer, so Save is reachable even on small screens.
+    """
+
     def __init__(self, parent, title: str, width: int = 520):
         super().__init__(parent)
+        from PySide6.QtWidgets import QScrollArea
         self.setWindowTitle(_(title))
-        self.setMinimumWidth(width)
-        self.lay = QVBoxLayout(self)
-        self.lay.setContentsMargins(22, 20, 22, 18)
+        self.setMinimumWidth(min(width, 900))
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        body = QWidget()
+        body.setObjectName("DialogBody")
+        self.lay = QVBoxLayout(body)
+        self.lay.setContentsMargins(22, 20, 22, 10)
         self.lay.setSpacing(12)
+        self._scroll.setWidget(body)
+        outer.addWidget(self._scroll, 1)
+        foot = QFrame()
+        foot.setObjectName("DialogFooter")
+        foot.setStyleSheet(f"#DialogFooter {{ border-top: 1px solid {theme.c('border')}; }}")
+        self.footer = QHBoxLayout(foot)
+        self.footer.setContentsMargins(22, 12, 22, 14)
+        outer.addWidget(foot)
+        self._foot = foot
         t = QLabel(_(title))
         t.setObjectName("CardTitle")
         t.setStyleSheet("font-size: 20px;")
         self.lay.addWidget(t)
 
+    def showEvent(self, e):
+        super().showEvent(e)
+        if self._foot.layout().count() == 0:
+            self._foot.hide()
+        # open at the natural size, but never taller/wider than the screen (the body scrolls instead)
+        from PySide6.QtGui import QGuiApplication
+        scr = (self.screen() or QGuiApplication.primaryScreen()).availableGeometry()
+        body = self._scroll.widget().sizeHint()
+        want_h = body.height() + (self._foot.sizeHint().height() if self._foot.isVisible() else 0) + 8
+        h = min(max(self.height(), want_h), int(scr.height() * 0.9))
+        w = min(max(self.width(), body.width() + 24), int(scr.width() * 0.92))
+        self.resize(w, h)
+        g = self.frameGeometry()
+        g.moveCenter(scr.center())
+        self.move(g.topLeft())
+
     def buttons(self, ok_text="OK", ok_kind="Primary"):
-        bb = QHBoxLayout()
-        bb.addStretch(1)
         cancel = button("Cancel")
         ok = button(ok_text, ok_kind)
         cancel.clicked.connect(self.reject)
         ok.clicked.connect(self._accept)
         ok.setDefault(True)
-        bb.addWidget(cancel)
-        bb.addWidget(ok)
-        self.lay.addLayout(bb)
+        self.footer.addStretch(1)
+        self.footer.addWidget(cancel)
+        self.footer.addWidget(ok)
         self.ok_btn = ok
         return ok
 
@@ -236,7 +275,7 @@ class GatePassPicker(Base):
         ok.clicked.connect(self._accept)
         bb.addWidget(c)
         bb.addWidget(ok)
-        self.lay.addLayout(bb)
+        self.footer.addLayout(bb)
         self.gate_pass_id: int | None = None
         self.search.setText(plate_hint)
         self.reload()
@@ -583,7 +622,7 @@ class AlertsDialog(Base):
         close.clicked.connect(self.accept)
         bb.addWidget(ack)
         bb.addWidget(close)
-        self.lay.addLayout(bb)
+        self.footer.addLayout(bb)
         self.reload()
 
     def reload(self):
