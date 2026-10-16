@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass, field
 
 import cv2
@@ -60,6 +61,8 @@ class BayService:
         bays = []
         for r in self.db.q("SELECT * FROM bays" + (" WHERE active=1" if active_only else "") + " ORDER BY id"):
             b = Bay(r["id"], r["name"], bool(r["active"]), bool(r["auto_session"]), json.loads(r["config"] or "{}"))
+            if b.config.get("deleted"):
+                continue
             b.cameras = [self._cam(c) for c in self.db.q("SELECT * FROM cameras WHERE bay_id=? ORDER BY id", (b.id,))]
             bays.append(b)
         return bays
@@ -68,7 +71,7 @@ class BayService:
         return next((b for b in self.list() if b.id == bay_id), None)
 
     def count(self) -> int:
-        return self.db.scalar("SELECT COUNT(*) FROM bays WHERE active=1") or 0
+        return len(self.list(active_only=True))
 
     def save_bay(self, actor: User, name: str, auto_session: bool = False, bay_id: int | None = None,
                  active: bool = True) -> int:
@@ -104,6 +107,44 @@ class BayService:
                         (json.dumps(geometry.to_dict()), blob, cam_id))
         audit(self.db, actor, "camera_calibrated", "camera", cam_id, geometry.to_dict())
 
-    def delete_camera(self, actor: User, cam_id: int):
+    def _busy(self, bay_id: int) -> bool:
+        return bool(self.db.scalar("SELECT COUNT(*) FROM sessions WHERE bay_id=? AND status='active' AND deleted=0",
+                                   (bay_id,)))
+
+    def disable_camera(self, actor: User, cam_id: int):
         self.db.execute("UPDATE cameras SET active=0 WHERE id=?", (cam_id,))
         audit(self.db, actor, "camera_disabled", "camera", cam_id)
+
+    def delete_camera(self, actor: User, cam_id: int):
+        """Remove a camera completely (its settings and calibration)."""
+        r = self.db.one("SELECT bay_id, name FROM cameras WHERE id=?", (cam_id,))
+        if r is None:
+            return
+        if self._busy(r["bay_id"]):
+            raise ValueError("A truck is loading on this bay. Close the session first.")
+        self.db.execute("DELETE FROM cameras WHERE id=?", (cam_id,))
+        audit(self.db, actor, "camera_deleted", "camera", cam_id, {"name": r["name"], "bay": r["bay_id"]})
+
+    def delete_bay(self, actor: User, bay_id: int):
+        """Delete a bay and its cameras.
+
+        A bay with loading history is hidden instead of erased, so past sessions, reports
+        and evidence still show where the truck was loaded.
+        """
+        r = self.db.one("SELECT name, config FROM bays WHERE id=?", (bay_id,))
+        if r is None:
+            return
+        if self._busy(bay_id):
+            raise ValueError("A truck is loading on this bay. Close the session first.")
+        has_history = bool(self.db.scalar("SELECT COUNT(*) FROM sessions WHERE bay_id=?", (bay_id,)))
+        with self.db.tx() as c:
+            c.execute("DELETE FROM cameras WHERE bay_id=?", (bay_id,))
+            if has_history:
+                cfg = json.loads(r["config"] or "{}")
+                cfg["deleted"] = True
+                # free the name so a new bay can use it; history keeps showing the old name
+                c.execute("UPDATE bays SET active=0, auto_session=0, config=?, name=? WHERE id=?",
+                          (json.dumps(cfg), f"{r['name']} (deleted {time.strftime('%d-%m-%Y')} #{bay_id})", bay_id))
+            else:
+                c.execute("DELETE FROM bays WHERE id=?", (bay_id,))
+        audit(self.db, actor, "bay_deleted", "bay", bay_id, {"name": r["name"], "kept_for_history": has_history})

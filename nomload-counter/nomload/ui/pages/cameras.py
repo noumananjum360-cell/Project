@@ -428,7 +428,8 @@ class CamerasPage(QWidget):
         self.bays.itemSelectionChanged.connect(self.load_cams)
         bc.lay.addWidget(self.bays)
         bb = QHBoxLayout()
-        for t, fn, k in (("Add bay", self.add_bay, "plus"), ("Edit", self.edit_bay, "edit")):
+        for t, fn, k in (("Add bay", self.add_bay, "plus"), ("Edit", self.edit_bay, "edit"),
+                         ("Delete bay", self.delete_bay, "x")):
             b = button(t, icon_name=k)
             b.clicked.connect(fn)
             bb.addWidget(b)
@@ -440,7 +441,8 @@ class CamerasPage(QWidget):
         cc.lay.addWidget(self.cams)
         cb = QHBoxLayout()
         for t, fn, k, kind in (("Add camera", self.add_cam, "plus", ""), ("Edit", self.edit_cam, "edit", ""),
-                               ("Calibrate", self.calibrate, "cameras", "Accent"), ("Disable", self.disable_cam, "x", "")):
+                               ("Calibrate", self.calibrate, "cameras", "Accent"), ("Disable", self.disable_cam, "lock", ""),
+                               ("Delete", self.delete_cam, "x", "")):
             b = button(t, kind, k)
             b.clicked.connect(fn)
             cb.addWidget(b)
@@ -547,8 +549,41 @@ class CamerasPage(QWidget):
     def disable_cam(self):
         c = self._cam()
         if c and confirm(self, f"{_('Disable camera')} {c.name}?"):
-            self.app.bays.delete_camera(self.app.user, c.id)
+            self.app.bays.disable_camera(self.app.user, c.id)
             self.load_bays()
+
+    def delete_cam(self):
+        c = self._cam()
+        if not c:
+            error(self, _("Select a camera first."))
+            return
+        if not confirm(self, f"{_('Delete camera')} {c.name}?\n\n{_('Its settings and calibration will be removed.')}"):
+            return
+        try:
+            self.app.bays.delete_camera(self.app.user, c.id)
+        except ValueError as e:
+            error(self, str(e))
+            return
+        self.load_bays()
+        self.main.restart_bays()
+
+    def delete_bay(self):
+        b = self._bay()
+        if not b:
+            error(self, _("Select a bay first."))
+            return
+        msg = f"{_('Delete bay')} {b.name} {_('and its')} {len(b.cameras)} {_('camera(s)')}?"
+        if self.app.db.scalar("SELECT COUNT(*) FROM sessions WHERE bay_id=?", (b.id,)):
+            msg += "\n\n" + _("Loading history of this bay is kept in History and Reports.")
+        if not confirm(self, msg):
+            return
+        try:
+            self.app.bays.delete_bay(self.app.user, b.id)
+        except ValueError as e:
+            error(self, str(e))
+            return
+        self.load_bays()
+        self.main.restart_bays()
 
     def restart(self):
         self.main.restart_bays()

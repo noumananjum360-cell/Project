@@ -333,6 +333,13 @@ def build():
                  "</b>.",
                  "Press <b>Apply &amp; restart bays</b> on the Cameras page."),
           fig("24_calibration", "Calibration: counting line with direction arrow and tolerance band"),
+          h2("Removing a camera or bay"),
+          bullets("<b>Disable</b> stops a camera but keeps its settings, so it can be switched on again.",
+                  "<b>Delete</b> (camera) removes the camera with its settings and calibration.",
+                  "<b>Delete bay</b> removes the bay and all its cameras. Trucks already loaded at that bay stay in "
+                  "History and Reports.",
+                  "A bay or camera cannot be deleted while a truck is loading on it. Close the session first.",
+                  "Press <b>Apply &amp; restart bays</b> afterwards if the Live Bays screen still shows it."),
           note("The shaded band around the line prevents double counting when a labourer stops or sways on the line. "
                "Widen it with <b>Line tolerance band</b> if workers often stand on the line."),
           PageBreak()]
