@@ -128,11 +128,11 @@ class GatePassService:
                         r["notes"], r["created_at"], items)
 
     def by_number(self, number: str) -> GatePass | None:
-        r = self.db.one("SELECT id FROM gate_passes WHERE number=? COLLATE NOCASE", (number.strip(),))
+        r = self.db.one("SELECT id FROM gate_passes WHERE number=? COLLATE NOCASE AND deleted=0", (number.strip(),))
         return self.get(r["id"]) if r else None
 
     def list(self, status: tuple = ("open", "loading"), search: str = "", limit: int = 300) -> list[GatePass]:
-        sql = "SELECT id FROM gate_passes WHERE 1=1"
+        sql = "SELECT id FROM gate_passes WHERE deleted=0"
         args: list = []
         if status:
             sql += f" AND status IN ({','.join('?' * len(status))})"
@@ -180,6 +180,27 @@ class GatePassService:
     def set_status(self, gid: int, status: str, actor: User | None = None):
         self.db.execute("UPDATE gate_passes SET status=? WHERE id=?", (status, gid))
         audit(self.db, actor, "gate_pass_status", "gate_pass", gid, status)
+
+    def delete(self, actor: User, gid: int, reason: str = ""):
+        """Delete a gate pass. Never-loaded gate passes are removed; others are hidden so the
+        trucks already loaded against them keep their history."""
+        if not actor.can("delete_records"):
+            raise ValueError("Only an Admin can delete gate passes.")
+        r = self.db.one("SELECT number, status FROM gate_passes WHERE id=?", (gid,))
+        if r is None:
+            return
+        if self.db.scalar("SELECT COUNT(*) FROM sessions WHERE gate_pass_id=? AND status='active' AND deleted=0", (gid,)):
+            raise ValueError(f"Gate pass {r['number']} is loading right now. Close the session first.")
+        used = self.db.scalar("SELECT COUNT(*) FROM sessions WHERE gate_pass_id=?", (gid,))
+        with self.db.tx() as c:
+            if used:
+                c.execute("UPDATE gate_passes SET deleted=1, number=?, notes=notes || ? WHERE id=?",
+                          (f"{r['number']} (deleted #{gid})", f"\n[deleted] {reason}", gid))
+            else:
+                c.execute("DELETE FROM gate_pass_items WHERE gate_pass_id=?", (gid,))
+                c.execute("DELETE FROM gate_passes WHERE id=?", (gid,))
+        audit(self.db, actor, "gate_pass_deleted", "gate_pass", gid, {"number": r["number"], "reason": reason,
+                                                                      "kept_for_history": bool(used)})
 
     def match_plate(self, plate: str) -> GatePass | None:
         """Find an open gate pass whose vehicle number matches a read plate."""

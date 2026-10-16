@@ -56,6 +56,15 @@ def public_key_path() -> Path:
     return Path(__file__).resolve().parent / "vendor_public_key.pem"
 
 
+def vendor_key_id(public_key: Ed25519PublicKey | None) -> str:
+    """Short ID of a vendor key pair, printed in the app and on key lists so they can be matched."""
+    if public_key is None:
+        return "none"
+    raw = public_key.public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+    h = hashlib.sha256(raw).hexdigest()[:8].upper()
+    return f"{h[:4]}-{h[4:]}"
+
+
 def load_public_key(path: Path | None = None) -> Ed25519PublicKey | None:
     p = path or public_key_path()
     if not p.exists():
@@ -194,7 +203,9 @@ def decode_key(key: str, public_key: Ed25519PublicKey) -> KeyInfo:
     try:
         public_key.verify(sig, payload)
     except InvalidSignature:
-        raise ValueError("Licence key signature is invalid.")
+        raise ValueError("This licence key was not issued for this NomLoad installation "
+                         f"(vendor key {vendor_key_id(public_key)}). Check that the key list shows the same "
+                         "vendor key ID, or ask Devnom for a key for this installation.")
     ver, tier, bays, flags, exp, kid = struct.unpack(_FMT, payload[:_PLEN])
     return KeyInfo(ver, tier, bays, flags, EPOCH + dt.timedelta(days=exp) if exp else None, kid,
                    payload[_PLEN:_PLEN + 8] if flags & MACHINE_LOCKED else None)

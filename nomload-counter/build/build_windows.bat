@@ -53,7 +53,16 @@ if errorlevel 1 (
 REM ---------- licensing key pair ----------
 if not exist "nomload\licensing\vendor_public_key.pem" (
   echo.
-  echo === Creating your licensing key pair (one time only) ===
+  echo  No vendor public key in nomload\licensing\vendor_public_key.pem
+  echo  A build needs the public key that matches YOUR licence keys.
+  echo   - If you already have licence keys: copy the project zip that came with them,
+  echo     or copy vendor_public_key.pem into nomload\licensing\ and run this again.
+  echo   - Creating a NEW key pair makes all existing licence keys invalid for this build.
+  echo.
+  choice /C YN /M "Create a NEW licensing key pair now"
+  if errorlevel 2 goto :fail
+  echo.
+  echo === Creating your licensing key pair ===
   "%VPY%" tools\keygen.py init
   if errorlevel 1 goto :fail
   echo.

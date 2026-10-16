@@ -265,7 +265,10 @@ def build():
           *steps("Log in as Admin and open <b>Settings</b>. Scroll to <b>Licence</b>.",
                  "Paste the licence key (it starts with <b>NLC-</b>) and press <b>Activate</b>.",
                  "The status bar at the bottom-left changes to <i>Professional: Licensed</i> (or your tier)."),
-          p("Without a key NomLoad runs as a 14-day trial with 2 bays, and reports carry a TRIAL watermark. A key "
+          note("If the message says the key was not issued for this installation, compare the <b>Vendor key ID</b> "
+               "shown under Licence with the Vendor key ID printed at the top of your licence key list. They must be "
+               "the same. If not, the program was built with a different key pair."),
+                    p("Without a key NomLoad runs as a 14-day trial with 2 bays, and reports carry a TRIAL watermark. A key "
             "locks to the first PC it is activated on. If the PC is replaced, send the <b>PC request code</b> shown "
             "in the same section to Devnom for a new activation key."),
           PageBreak()]
@@ -378,6 +381,11 @@ def build():
                  ["GP-1001", "LES-4721", "Al-Madina Traders", "Sugar 50kg bag", "100"],
                  ["GP-1002", "TLA-552", "City Distributors", "Carton 1.5L x6", "600"]], [26, 26, 46, 46, 30]),
           p("Optional columns: driver, phone, destination. Product names must match the Products page."),
+          h2("Cancelling or deleting a gate pass"),
+          bullets("<b>Cancel gate pass</b> closes an open gate pass that will not be loaded.",
+                  "<b>Delete</b> (Admin only, with PIN and reason) removes a gate pass entered by mistake. A gate pass "
+                  "that was already loaded stays linked to its trucks in History.",
+                  "A gate pass cannot be deleted while its truck is loading."),
           PageBreak()]
 
     # 7 ---------------------------------------------------------------- loading
@@ -437,6 +445,11 @@ def build():
                   "to a distributor in a dispute.",
                   "<b>Loading certificate</b> prints the PDF certificate for this truck.",
                   "The <b>Audit trail</b> tab lists every action on this truck with user and time."),
+          h2("Deleting history records"),
+          p("Test trucks or wrong records can be removed from History. Select one or more rows (Ctrl+click or "
+            "Shift+click), press <b>Delete selected</b>, then enter the Admin PIN and the reason. Deleted trucks "
+            "disappear from History, the Dashboard and Reports. The deletion itself stays in the audit log. A truck "
+            "that is still loading cannot be deleted."),
           fig("18_session_evidence", "Evidence check: all files intact"),
           fig("19_session_audit", "Audit trail of one truck"),
           PageBreak()]

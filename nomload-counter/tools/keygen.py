@@ -27,7 +27,7 @@ from cryptography.hazmat.primitives import serialization  # noqa: E402
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: E402
 
 from nomload.licensing.license import (TIER_BY_NAME, TIERS, decode_key, load_public_key, make_key,  # noqa: E402
-                                       make_revocation, parse_request_code, public_key_path)
+                                       make_revocation, parse_request_code, public_key_path, vendor_key_id)
 
 KEY_DIR = Path(__file__).resolve().parent / "vendor_keys"
 PRIV = KEY_DIR / "vendor_private.pem"
@@ -50,6 +50,7 @@ def cmd_init(a):
     (KEY_DIR / "vendor_public.pem").write_bytes(pub)
     public_key_path().write_bytes(pub)
     print(f"Created {PRIV}\nInstalled public key into {public_key_path()} - rebuild the app.")
+    print(f"Vendor key ID: {vendor_key_id(k.public_key())}")
 
 
 def _tier(name: str) -> int:
@@ -80,7 +81,7 @@ def cmd_batch(a):
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         w.writeheader()
         w.writerows(rows)
-    print(f"Wrote {len(rows)} keys to {a.out}")
+    print(f"Wrote {len(rows)} keys to {a.out}  (vendor key ID {vendor_key_id(load_private().public_key())})")
 
 
 def cmd_activation(a):
@@ -97,7 +98,7 @@ def cmd_revoke(a):
 def cmd_verify(a):
     pub = load_public_key(KEY_DIR / "vendor_public.pem") or load_public_key()
     info = decode_key(a.key, pub)
-    print(f"Valid key: id={info.key_id} tier={info.tier_name} bays={info.max_bays} "
+    print(f"Vendor key ID {vendor_key_id(pub)}. Valid key: id={info.key_id} tier={info.tier_name} bays={info.max_bays} "
           f"expiry={info.expiry or 'perpetual'} machine_locked={info.machine_locked}")
 
 

@@ -217,6 +217,11 @@ class SettingsPage(QWidget):
         kh.addWidget(self.key, 1)
         kh.addWidget(ak)
         f.addRow(_("Licence key"), kh)
+        from nomload.licensing.license import vendor_key_id
+        vk = QLabel(vendor_key_id(self.app.license.pub))
+        vk.setObjectName("Muted")
+        vk.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        f.addRow(_("Vendor key ID"), vk)
         rv = button("Import revocation list...")
         rv.clicked.connect(self.import_revocation)
         f.addRow("", rv)

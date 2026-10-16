@@ -52,7 +52,9 @@ class SessionsPage(QWidget):
         edit.clicked.connect(self.edit_gp)
         canc = button("Cancel gate pass", icon_name="x")
         canc.clicked.connect(self.cancel_gp)
-        for b in (edit, canc, tpl, imp, new):
+        self.del_gp_btn = button("Delete", icon_name="x")
+        self.del_gp_btn.clicked.connect(self.delete_gp)
+        for b in (edit, canc, self.del_gp_btn, tpl, imp, new):
             bar.addWidget(b)
         gl.addLayout(bar)
         self.gp_table = make_table(["Gate pass", "Vehicle", "Customer", "Destination", "Products", "Total", "Status",
@@ -92,6 +94,7 @@ class SessionsPage(QWidget):
 
     def showEvent(self, e):
         super().showEvent(e)
+        self.del_gp_btn.setVisible(bool(self.app.user and self.app.user.can("delete_records")))
         self.refresh()
 
     def refresh(self):
@@ -148,6 +151,25 @@ class SessionsPage(QWidget):
         if confirm(self, f"{_('Cancel gate pass')} {gp.number}?"):
             self.app.gate_passes.set_status(gid, "cancelled", self.app.user)
             self.load_gate_passes()
+
+    def delete_gp(self):
+        gid = selected_data(self.gp_table)
+        if not gid:
+            error(self, _("Select a gate pass first."))
+            return
+        gp = self.app.gate_passes.get(gid)
+        if not confirm(self, f"{_('Delete gate pass')} {gp.number}?"):
+            return
+        sup, reason = ask_supervisor(self, self.app, _("Admin approval required to delete a gate pass."),
+                                     need_reason=True)
+        if not sup:
+            return
+        try:
+            self.app.gate_passes.delete(sup, gid, reason)
+        except ValueError as e:
+            error(self, str(e))
+            return
+        self.load_gate_passes()
 
     def import_gp(self):
         p, _f = QFileDialog.getOpenFileName(self, _("Import gate passes"), "", "CSV / Excel (*.csv *.xlsx)")

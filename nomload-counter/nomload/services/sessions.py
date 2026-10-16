@@ -286,6 +286,8 @@ class SessionService:
     def soft_delete(self, sid: int, admin: User, reason: str):
         if not admin.can("delete_records"):
             raise SessionError("Only an Admin can delete records.")
+        if self.db.scalar("SELECT status FROM sessions WHERE id=?", (sid,)) == "active":
+            raise SessionError("This truck is still loading. Close or cancel the session first.")
         self.db.execute("UPDATE sessions SET deleted=1, notes=notes || ? WHERE id=?", (f"\n[deleted] {reason}", sid))
         audit(self.db, admin, "session_deleted", "session", sid, {"reason": reason})
 

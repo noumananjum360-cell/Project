@@ -64,12 +64,16 @@ class HistoryPage(QWidget):
         self.table = make_table(["#", "Date / time", "Bay", "Gate pass", "Customer", "Vehicle", "Expected", "Counted",
                                  "Status"], 4)
         self.table.doubleClicked.connect(self.open)
+        self.table.setSelectionMode(self.table.SelectionMode.ExtendedSelection)
         lay.addWidget(self.table, 1)
         bb = QHBoxLayout()
         self.count_lbl = QLabel("")
         self.count_lbl.setObjectName("Muted")
         bb.addWidget(self.count_lbl)
         bb.addStretch(1)
+        self.del_btn = button("Delete selected", icon_name="x")
+        self.del_btn.clicked.connect(self.delete_selected)
+        bb.addWidget(self.del_btn)
         op = button("Open details", "Primary", "search")
         op.clicked.connect(self.open)
         bb.addWidget(op)
@@ -79,6 +83,7 @@ class HistoryPage(QWidget):
 
     def showEvent(self, e):
         super().showEvent(e)
+        self.del_btn.setVisible(bool(self.app.user and self.app.user.can("delete_records")))
         cur_p, cur_b = self.product.currentData(), self.bay.currentData()
         self.product.clear()
         self.product.addItem(_("Any product"), None)
@@ -108,6 +113,30 @@ class HistoryPage(QWidget):
             colors[(i, 8)] = status_color(r["status"])
         fill_table(self.table, out, [r["id"] for r in rows], colors)
         self.count_lbl.setText(f"{len(rows)} {_('session(s)')}")
+
+    def delete_selected(self):
+        rows = sorted({i.row() for i in self.table.selectedIndexes()})
+        sids = [self.table.item(r, 0).data(Qt.ItemDataRole.UserRole) for r in rows]
+        if not sids:
+            error(self, _("Select one or more sessions first."))
+            return
+        if not confirm(self, f"{_('Delete')} {len(sids)} {_('session(s) from History?')}"):
+            return
+        sup, reason = ask_supervisor(self, self.app, _("Admin approval required to delete records."), need_reason=True)
+        if not sup:
+            return
+        if not sup.can("delete_records"):
+            error(self, _("Only an Admin can delete records."))
+            return
+        skipped = 0
+        for sid in sids:
+            try:
+                self.app.sessions.soft_delete(sid, sup, reason)
+            except Exception:
+                skipped += 1
+        if skipped:
+            error(self, f"{skipped} {_('session(s) are still loading and were not deleted.')}")
+        self.search()
 
     def open(self):
         sid = selected_data(self.table)

@@ -26,6 +26,7 @@ def test_soft_delete_admin_only(app):
     from nomload.services.sessions import SessionError
     bid = app.bays.save_bay(app.user, "B")
     sid = app.sessions.start(bid, app.user)
+    app.sessions.close(sid, app.user)
     with pytest.raises(SessionError):
         app.sessions.soft_delete(sid, User(9, "c", "", "clerk"), "x")
     app.sessions.soft_delete(sid, app.user, "test session")
