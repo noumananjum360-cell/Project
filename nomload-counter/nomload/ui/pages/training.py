@@ -41,6 +41,10 @@ class AnnotCanvas(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
     def set_image(self, bgr, boxes):
+        if bgr is None:
+            self.img, self.boxes, self.sel = None, [], -1
+            self.update()
+            return
         self.img = bgr_to_qimage(bgr)
         self.h, self.w = bgr.shape[:2]
         self.boxes = [list(b) for b in boxes]
@@ -181,6 +185,8 @@ class TrainingPage(QWidget):
         self.ds_combo.currentIndexChanged.connect(self._ds_changed)
         hdr.add(QLabel(_("Dataset")))
         hdr.add(self.ds_combo)
+        dd = hdr.add(button("Delete dataset", icon_name="x"))
+        dd.clicked.connect(self.delete_dataset)
         nd = hdr.add(button("New dataset", icon_name="plus"))
         nd.clicked.connect(self.new_dataset)
         lay.addWidget(hdr)
@@ -228,7 +234,14 @@ class TrainingPage(QWidget):
         self.stats_lbl = QLabel()
         self.stats_card.lay.addWidget(self.stats_lbl)
         l.addWidget(self.stats_card)
-        l.addStretch(1)
+        vc = Card("Videos in this dataset")
+        self.src_list = QListWidget()
+        self.src_list.setMinimumHeight(140)
+        vc.lay.addWidget(self.src_list)
+        ds_btn = button("Delete frames from this video", icon_name="x")
+        ds_btn.clicked.connect(self.delete_source)
+        vc.lay.addWidget(ds_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+        l.addWidget(vc, 1)
         return w
 
     def _tab_annotate(self):
@@ -238,8 +251,15 @@ class TrainingPage(QWidget):
         left = QVBoxLayout()
         self.img_list = QListWidget()
         self.img_list.setMaximumWidth(260)
+        self.img_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         self.img_list.currentRowChanged.connect(self.load_image)
         left.addWidget(self.img_list, 1)
+        QShortcut(QKeySequence("Delete"), self.img_list, activated=self.delete_images,
+                  context=Qt.ShortcutContext.WidgetShortcut)
+        del_img = button("Delete image", icon_name="x")
+        del_img.setToolTip(_("Delete the selected images from the dataset (Ctrl/Shift-click to select several)"))
+        del_img.clicked.connect(self.delete_images)
+        left.addWidget(del_img)
         self.only_unl = QCheckBox(_("Show only unlabelled"))
         self.only_unl.toggled.connect(self.reload_images)
         left.addWidget(self.only_unl)
@@ -263,9 +283,10 @@ class TrainingPage(QWidget):
         bar.addWidget(addc)
         bar.addWidget(auto)
         bar.addWidget(auto_all)
+        clr = button("Clear boxes", icon_name="x")
+        clr.clicked.connect(self.clear_boxes)
+        bar.addWidget(clr)
         bar.addStretch(1)
-        bar.addWidget(prev)
-        bar.addWidget(nxt)
         mid.addLayout(bar)
         self.canvas = AnnotCanvas()
         self.canvas.changed.connect(self.save_labels)
@@ -273,7 +294,11 @@ class TrainingPage(QWidget):
         mid.addWidget(self.canvas, 1)
         hint = QLabel(_("Drag: new box · 1-9: class · Del: remove · PgDn: next"))
         hint.setObjectName("Muted")
-        mid.addWidget(hint)
+        foot = QHBoxLayout()
+        foot.addWidget(hint, 1)
+        foot.addWidget(prev)
+        foot.addWidget(nxt)
+        mid.addLayout(foot)
         l.addLayout(mid, 1)
         QShortcut(QKeySequence("PgDown"), w, activated=lambda: self.step(1))
         QShortcut(QKeySequence("PgUp"), w, activated=lambda: self.step(-1))
@@ -339,9 +364,12 @@ class TrainingPage(QWidget):
         ev.clicked.connect(self.eval_samples)
         imp = button("Import ONNX model...", icon_name="upload")
         imp.clicked.connect(self.import_model)
+        dm = button("Delete model", icon_name="x")
+        dm.clicked.connect(self.delete_model)
         h.addWidget(act)
         h.addWidget(ev)
         h.addWidget(imp)
+        h.addWidget(dm)
         h.addStretch(1)
         c.lay.addLayout(h)
         l.addWidget(c, 1)
@@ -391,9 +419,64 @@ class TrainingPage(QWidget):
         self.update_stats()
         self.reload_images()
 
+    def delete_dataset(self):
+        if not self.ds:
+            return
+        n = len(self.ds.image_files())
+        if not confirm(self, f"{_('Delete dataset')} {self.ds.name} {_('and its')} {n} {_('image(s)')}?\n\n"
+                             f"{_('Trained models are kept.')}"):
+            return
+        self.ds.delete()
+        self.ds = None
+        self.idx = -1
+        self.reload_datasets()
+
+    def delete_source(self):
+        it = self.src_list.currentItem()
+        if not it or not self.ds:
+            error(self, _("Select a video first."))
+            return
+        src, n = it.data(Qt.ItemDataRole.UserRole)
+        if not confirm(self, f"{_('Delete all')} {n} {_('frame(s) taken from')} '{src}'?\n\n"
+                             f"{_('They will not be used for training.')}"):
+            return
+        self.ds.delete_source(src)
+        self.idx = -1
+        self.update_stats()
+        self.reload_images()
+
+    def delete_images(self):
+        rows = sorted({self.img_list.row(i) for i in self.img_list.selectedItems()})
+        if not rows and 0 <= self.idx < len(self.files):
+            rows = [self.idx]
+        if not rows or not self.ds:
+            return
+        files = [self.files[r] for r in rows if r < len(self.files)]
+        msg = f"{_('Delete')} {files[0].name}?" if len(files) == 1 else f"{_('Delete')} {len(files)} {_('images')}?"
+        if not confirm(self, msg):
+            return
+        self.ds.delete_images(files)
+        self.idx = min(rows)
+        self.update_stats()
+        self.reload_images()
+
+    def clear_boxes(self):
+        if 0 <= self.idx < len(self.files):
+            self.canvas.boxes = []
+            self.ds.clear_labels(self.files[self.idx])
+            self.canvas.update()
+            it = self.img_list.item(self.idx)
+            if it:
+                it.setText("○ " + self.files[self.idx].name)
+
     def update_stats(self):
         if not self.ds:
             return
+        self.src_list.clear()
+        for src, n in self.ds.sources().items():
+            it = QListWidgetItem(f"{src}   ({n} {_('frames')})")
+            it.setData(Qt.ItemDataRole.UserRole, (src, n))
+            self.src_list.addItem(it)
         st = self.ds.stats()
         per = ", ".join(f"{k}: {v}" for k, v in st["per_class"].items() if v)
         self.stats_lbl.setText(f"<b>{st['images']}</b> {_('images')}, <b>{st['labeled']}</b> {_('labelled')}<br>{per}")
@@ -449,6 +532,9 @@ class TrainingPage(QWidget):
         self.img_list.blockSignals(False)
         if files:
             self.img_list.setCurrentRow(max(0, min(self.idx, len(files) - 1)))
+        else:
+            self.idx = -1
+            self.canvas.set_image(None, [])
 
     def load_image(self, row):
         if row < 0 or row >= len(self.files):
@@ -612,6 +698,21 @@ class TrainingPage(QWidget):
         p = selected_data(self.models)
         if p:
             self._activate(p)
+
+    def delete_model(self):
+        p = selected_data(self.models)
+        if not p:
+            error(self, _("Select a model first."))
+            return
+        if not confirm(self, f"{_('Delete model')} {Path(p).stem}?"):
+            return
+        from nomload.training.trainer import delete_model
+        try:
+            delete_model(p, self.app.model_path())
+        except ValueError as e:
+            error(self, str(e))
+            return
+        self.reload_models()
 
     def import_model(self):
         p, _f = QFileDialog.getOpenFileName(self, _("Import ONNX detector"), "", "ONNX (*.onnx)")

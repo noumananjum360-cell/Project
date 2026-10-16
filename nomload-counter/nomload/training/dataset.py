@@ -88,6 +88,48 @@ class Dataset:
             lines.append(f"{int(c)} {(x0 + x1) / 2 / w:.6f} {(y0 + y1) / 2 / h:.6f} {(x1 - x0) / w:.6f} {(y1 - y0) / h:.6f}")
         self.label_path(img).write_text("\n".join(lines))
 
+    # ------------------------------------------------------------ removing data
+    @staticmethod
+    def source_of(img: Path) -> str:
+        """Video an extracted frame came from (frames are saved as <video>_<frame>.jpg)."""
+        stem = img.stem
+        head, _sep, tail = stem.rpartition("_")
+        return head if head and tail.isdigit() else stem
+
+    def sources(self) -> dict[str, int]:
+        """{video name: number of frames} for every video in the dataset."""
+        out: dict[str, int] = {}
+        for p in self.image_files():
+            k = self.source_of(p)
+            out[k] = out.get(k, 0) + 1
+        return dict(sorted(out.items()))
+
+    def delete_images(self, imgs: list[Path]) -> int:
+        """Delete images and their labels from the dataset (they are no longer used for training)."""
+        n = 0
+        for img in imgs:
+            img = Path(img)
+            if img.parent != self.images:
+                continue  # only files inside this dataset
+            self.label_path(img).unlink(missing_ok=True)
+            if img.exists():
+                img.unlink()
+                n += 1
+        return n
+
+    def delete_source(self, source: str) -> int:
+        """Delete every frame taken from one video."""
+        return self.delete_images([p for p in self.image_files() if self.source_of(p) == source])
+
+    def clear_labels(self, img: Path):
+        self.label_path(img).unlink(missing_ok=True)
+
+    def delete(self):
+        """Delete the whole dataset folder."""
+        import shutil
+        if self.root.parent == datasets_dir():
+            shutil.rmtree(self.root, ignore_errors=True)
+
     def stats(self) -> dict:
         imgs = self.image_files()
         labeled = [i for i in imgs if self.is_labeled(i)]

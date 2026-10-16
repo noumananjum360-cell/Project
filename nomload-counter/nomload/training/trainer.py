@@ -170,6 +170,17 @@ class TrainJob:
         self.log(f"Saved {out}")
 
 
+def delete_model(path: str | Path, active_path: str | Path):
+    """Delete a trained/imported model. The bundled starter and the active model are kept."""
+    p = Path(path)
+    if p.parent != user_models_dir():
+        raise ValueError("The built-in starter model cannot be deleted.")
+    if p.resolve() == Path(active_path).resolve():
+        raise ValueError("This model is in use. Activate another model first.")
+    p.unlink(missing_ok=True)
+    p.with_suffix(".json").unlink(missing_ok=True)
+
+
 def list_models() -> list[dict]:
     from nomload.config import bundled_models_dir
     out = []
