@@ -29,7 +29,6 @@ KINDS = {
     "camera_offline": ("critical", "Camera offline"),
     "camera_online": ("info", "Camera back online"),
     "tamper": ("critical", "Camera tampering"),
-    "disk_full": ("critical", "Disk almost full"),
     "plate_mismatch": ("warning", "Plate does not match gate pass"),
     "session_released": ("info", "Truck released after mismatch"),
     "cleared": ("info", "Truck cleared"),

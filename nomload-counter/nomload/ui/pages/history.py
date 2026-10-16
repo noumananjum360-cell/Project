@@ -286,11 +286,10 @@ class SessionDetailDialog(QDialog):
         rows, colors = [], {}
         for i, r in enumerate(res):
             rows.append([r["kind"], Path(r["path"]).name, r["sha256"][:24] + "…", r["status"].upper()])
-            colors[(i, 3)] = theme.c("success") if r["status"] == "ok" else (
-                theme.c("muted") if r["status"] == "removed" else theme.c("danger"))
+            colors[(i, 3)] = theme.c("success") if r["status"] == "ok" else theme.c("danger")
         fill_table(self.ev, rows, colors=colors)
         self.tabs.setCurrentWidget(self.ev)
-        bad = [r for r in res if r["status"] not in ("ok", "removed")]
+        bad = [r for r in res if r["status"] != "ok"]
         from nomload.services.context import audit
         audit(self.app.db, self.app.user, "evidence_verified", "session", self.sid, {"files": len(res), "problems": len(bad)})
         if bad:

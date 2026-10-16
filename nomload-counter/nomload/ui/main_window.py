@@ -232,8 +232,11 @@ class MainWindow(QMainWindow):
             if not d.exec():
                 self.app.user = None
                 return
+        self.app.start_bays(self.bridge)
         self._build_shell()
-        self.restart_bays(busy=_("Starting cameras..."))
+        if "live" in self.pages:
+            self.pages["live"].rebuild()
+        self.refresh_status()
         st = self.app.license.status()
         if not st.usable:
             self.toast({"severity": "critical", "title": _("Licence"), "message": st.message + " - " +
@@ -264,25 +267,17 @@ class MainWindow(QMainWindow):
         self.go(current)
 
     # ------------------------------------------------------------- runtime control
-    def restart_bays(self, busy: str | None = None):
-        """Stop and start every bay. The slow part runs off the UI thread."""
+    def restart_bays(self):
         if self.app.user is None:
             return
-        from nomload.ui.widgets import run_async
-
-        def done(_r=None):
-            if "live" in self.pages:
-                self.pages["live"].rebuild()
-            self.refresh_status()
-        run_async(self, lambda: self.app.start_bays(self.bridge), done, busy=busy)
+        self.app.start_bays(self.bridge)
+        if "live" in self.pages:
+            self.pages["live"].rebuild()
+        self.refresh_status()
 
     def reload_models_and_bays(self):
-        def work():
-            self.app.load_models()
-            self.app.start_bays(self.bridge)
         from nomload.ui.widgets import run_async
-        run_async(self, work, lambda _r: (self.pages["live"].rebuild() if "live" in self.pages else None,
-                                          self.refresh_status()), busy=_("Reloading AI models..."))
+        run_async(self, self.app.load_models, lambda _r: self.restart_bays(), busy=_("Reloading AI models..."))
 
     # ------------------------------------------------------------- alerts & status
     def toast(self, alert: dict):
@@ -318,17 +313,7 @@ class MainWindow(QMainWindow):
         self.model_lbl.setText(f"{_('Model')}: {det.name}" + (" · GPU" if det and det.providers[0] != "CPUExecutionProvider"
                                                               else " · CPU") if det else "")
         q = self.app.alerts.pending_count()
-        txt = f"{q} {_('alert(s) in outbox')}" if q else ""
-        from nomload.config import data_home
-        from nomload.core.sysutil import free_disk_gb
-        gb = free_disk_gb(data_home())
-        if gb < 10:
-            # a nearly full drive makes Windows (page file) and video recording stall
-            txt = (txt + "   " if txt else "") + f"⚠ {_('Low disk space')}: {gb:.1f} GB {_('free')}"
-            self.queue_lbl.setStyleSheet(f"color:{theme.c('danger')}; font-weight:600;")
-        else:
-            self.queue_lbl.setStyleSheet("")
-        self.queue_lbl.setText(txt)
+        self.queue_lbl.setText(f"{q} {_('alert(s) in outbox')}" if q else "")
         n = self.app.db.scalar("SELECT COUNT(*) FROM alerts WHERE acknowledged_at IS NULL AND severity<>'info'") or 0
         self.alert_btn.setIcon(icons.icon("bell", theme.c("danger") if n else theme.c("muted")))
         self.alert_btn.setText(f" {n}" if n else "")

@@ -184,11 +184,6 @@ class BayRuntime(threading.Thread):
         self.src.start()
         if self.plate_src:
             self.plate_src.start()
-        # Live cameras send 25-30 fps; counting needs about 15. Analysing a file
-        # (lockstep) still uses every frame.
-        max_fps = float(self.app.settings.get("max_process_fps") or 0)
-        period = 1.0 / max_fps if max_fps > 0 and not self.src.lockstep else 0.0
-        next_t = 0.0
         last_id = -1
         n = 0
         t_fps = time.time()
@@ -204,10 +199,6 @@ class BayRuntime(threading.Thread):
                 continue
             last_id, ts, frame = got
             self._check_offline()
-            if period:
-                if ts < next_t:
-                    continue
-                next_t = max(next_t + period, ts - period)
             n += 1
             if self.skip and n % (self.skip + 1):
                 continue
@@ -262,7 +253,7 @@ class BayRuntime(threading.Thread):
                                                       "product": None, "units": 1})
             annotated = self.engine.annotate(res)
             self.buffer.push(annotated, ts)
-            if self.recorder and self._disk_ok(ts):
+            if self.recorder:
                 self.recorder.write(annotated, ts)
         # ---- plate
         if sid and not self.plate_locked and n % 4 == 0 and self.app.settings.get("auto_plate_read"):
@@ -270,20 +261,6 @@ class BayRuntime(threading.Thread):
         if ts - self._last_emit >= 1 / 15:
             self._last_emit = ts
             self.listener.frame(self.bay.id, annotated, dict(self.status))
-
-    def _disk_ok(self, ts: float) -> bool:
-        """Stop writing the loading video when the drive is almost full (Windows needs the space)."""
-        if ts - getattr(self, "_disk_checked", 0.0) > 30:
-            from nomload.config import evidence_dir
-            from nomload.core.sysutil import free_disk_gb
-            self._disk_checked = ts
-            was = getattr(self, "_disk_ok_flag", True)
-            self._disk_ok_flag = free_disk_gb(evidence_dir()) >= 1.0
-            if was and not self._disk_ok_flag:
-                self.app.alerts.raise_alert("disk_full", f"{self.bay.name}: less than 1 GB free on the drive - "
-                                            "loading video recording paused. Free up space (Settings → Storage).",
-                                            self.bay.id, self.session_id)
-        return getattr(self, "_disk_ok_flag", True)
 
     def _record_event(self, sid, ev, frame):
         self._event_seq += 1

@@ -491,42 +491,20 @@ class TrainingPage(QWidget):
         p, _f = QFileDialog.getOpenFileName(self, _("Choose loading video"), "", "Video (*.mp4 *.avi *.mkv *.mov)")
         if not p:
             return
-        # read the video in a background thread; the dialog is updated by a timer
         dlg = QProgressDialog(_("Extracting frames..."), _("Stop"), 0, 100, self)
         dlg.setWindowModality(Qt.WindowModality.WindowModal)
-        dlg.setMinimumDuration(0)
-        st = {"stop": False, "i": 0, "total": 1, "saved": 0, "done": False, "n": 0, "err": ""}
-        dlg.canceled.connect(lambda: st.update(stop=True))
-        ds, every, maxf = self.ds, self.every.value(), self.maxf.value()
+        stop = {"v": False}
+        dlg.canceled.connect(lambda: stop.update(v=True))
 
-        def work():
-            try:
-                st["n"] = extract_frames(p, ds, every, maxf, True,
-                                         lambda i, total, saved: st.update(i=i, total=max(1, total), saved=saved),
-                                         lambda: st["stop"])
-            except Exception as e:  # shown below
-                st["err"] = str(e)
-            st["done"] = True
+        def prog(i, total, saved):
+            dlg.setValue(int(100 * i / max(1, total)))
+            dlg.setLabelText(f"{_('Extracting frames...')} {saved}")
+            QApplication.processEvents()
 
-        threading.Thread(target=work, daemon=True, name="extract").start()
-        from PySide6.QtCore import QTimer
-        timer = QTimer(self)
-
-        def tick():
-            if not st["done"]:
-                dlg.setValue(min(99, int(100 * st["i"] / st["total"])))
-                dlg.setLabelText(f"{_('Extracting frames...')} {st['saved']}")
-                return
-            timer.stop()
-            dlg.close()
-            self.update_stats()
-            if st["err"]:
-                error(self, st["err"])
-            else:
-                info(self, f"{st['n']} {_('frames added. Next: Annotate.')}")
-
-        timer.timeout.connect(tick)
-        timer.start(200)
+        n = extract_frames(p, self.ds, self.every.value(), self.maxf.value(), True, prog, lambda: stop["v"])
+        dlg.close()
+        self.update_stats()
+        info(self, f"{n} {_('frames added. Next: Annotate.')}")
 
     def synthetic(self):
         from nomload.ui.widgets import run_async

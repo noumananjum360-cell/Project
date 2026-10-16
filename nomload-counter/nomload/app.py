@@ -25,9 +25,6 @@ def run_gui() -> int:
     setup_logging()
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     qapp = QApplication(sys.argv)
-    from nomload.core.sysutil import disable_power_throttling, raise_ui_thread_priority
-    raise_ui_thread_priority()
-    disable_power_throttling()
     qapp.setApplicationName(APP_NAME)
     qapp.setOrganizationName(VENDOR)
     qapp.setWindowIcon(QIcon(str(assets_dir() / "app.ico")))
@@ -70,13 +67,6 @@ def run_gui() -> int:
     win = MainWindow(app)
     win.showMaximized()
     splash.finish(win)
-    from PySide6.QtCore import QTimer
-    from nomload.core.sysutil import UiWatchdog
-    dog = UiWatchdog()
-    beat = QTimer()
-    beat.timeout.connect(dog.alive)
-    beat.start(250)
-    dog.start()
     rc = qapp.exec()
     app.shutdown()
     return rc
