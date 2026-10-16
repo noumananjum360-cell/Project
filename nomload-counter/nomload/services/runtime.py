@@ -267,8 +267,7 @@ class BayRuntime(threading.Thread):
         d = evidence.session_dir(sid, self.session_started_at) / "snapshots"
         sign = "+1" if ev.direction > 0 else "-1"
         path = d / f"{self._event_seq:05d}_{ev.cls}_{'in' if ev.direction > 0 else 'out'}.jpg"
-        caption = f"{time.strftime('%d-%m-%Y %H:%M:%S', time.localtime(ev.timestamp))}  {ev.cls} {sign}  " \
-                  f"conf {ev.confidence:.2f}  track {ev.track_id}"
+        caption = f"{time.strftime('%d-%m-%Y %H:%M:%S', time.localtime(ev.timestamp))}  {ev.cls} {sign}"
         snapshot(frame, ev.box, path, caption)
         evidence.register(self.app.db, sid, "snapshot", path)
         eid, product = self.app.sessions.add_event(sid, ev.cls, ev.direction, ev.confidence, ev.flagged, ev.reason,

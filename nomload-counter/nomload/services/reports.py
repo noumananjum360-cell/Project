@@ -6,7 +6,7 @@ import json
 import time
 from pathlib import Path
 
-from nomload import APP_NAME, VENDOR, __version__
+from nomload import APP_NAME, __version__
 from nomload.config import assets_dir
 from nomload.data.db import Database
 
@@ -35,6 +35,25 @@ def fmt_dur(s: float) -> str:
 
 
 # ===================================================================== statistics
+
+def _without_caption(paths: list[str]) -> list[str]:
+    """Copies of the photos without the caption strip burned in at the bottom (older photos
+    carried technical details there). The originals stay untouched as evidence."""
+    import tempfile
+
+    import cv2
+    out = []
+    tmp = Path(tempfile.mkdtemp(prefix="nomload_cert_"))
+    for i, p in enumerate(paths):
+        img = cv2.imread(p)
+        if img is None or img.shape[0] < 60:
+            out.append(p)
+            continue
+        dst = tmp / f"{i:02d}.jpg"
+        cv2.imwrite(str(dst), img[: img.shape[0] - 22], [cv2.IMWRITE_JPEG_QUALITY, 90])
+        out.append(str(dst))
+    return out
+
 class Stats:
     def __init__(self, db: Database):
         self.db = db
@@ -165,7 +184,7 @@ class _Doc:
         c.line(16 * mm, h - 30 * mm, w - 16 * mm, h - 30 * mm)
         c.setFont("Helvetica", 7.5)
         c.setFillColor(HexColor(GREY))
-        c.drawString(16 * mm, 10 * mm, f"{self.title}  |  generated {fmt_ts(time.time())} by {APP_NAME} {__version__} ({VENDOR})")
+        c.drawString(16 * mm, 10 * mm, f"{self.title}  |  {fmt_ts(time.time())}")
         c.drawRightString(w - 16 * mm, 10 * mm, f"Page {doc.page}")
         if self.watermark:
             c.setFont("Helvetica-Bold", 90)
@@ -251,8 +270,7 @@ class ReportService:
                  ["Customer / distributor", gp.customer if gp and gp.customer else "-"],
                  ["Destination", gp.destination if gp and gp.destination else "-"],
                  ["Vehicle (gate pass)", gp.vehicle_no if gp and gp.vehicle_no else "-"],
-                 ["Plate read by camera", f"{s.plate_text or '-'}" + (f"  (confidence {s.plate_confidence:.0%})"
-                                                                      if s.plate_confidence else "")],
+                 ["Vehicle number", s.plate_text or "-"],
                  ["Loading started", fmt_ts(s.started_at)], ["Loading finished", fmt_ts(s.ended_at)],
                  ["Loading time", fmt_dur(s.duration_s)], ["Started by", s.started_by or "-"],
                  ["Closed by", s.closed_by or "-"]]
@@ -266,32 +284,24 @@ class ReportService:
         else:
             story.append(kv)
         story += [Spacer(1, 10), Paragraph("<b>Quantities</b>", ss["Normal"]), Spacer(1, 4)]
-        rows = [["Product", "Expected", "Counted", "Difference", "Tolerance", "To review", "Result"]]
+        rows = [["Product", "Expected", "Loaded", "Difference", "Result"]]
         for l in s.lines:
             rows.append([Paragraph(l.name, ss["Cell"]), "-" if l.expected is None else str(l.expected), str(l.counted),
-                         f"{l.diff:+d}" if l.expected is not None else "-", f"±{l.allowed}", str(l.pending),
-                         "OK" if l.ok else "MISMATCH"])
-        rows.append(["Total", str(s.total_expected), str(s.total_counted), f"{s.total_counted - s.total_expected:+d}",
-                     "", str(s.total_pending), ""])
-        t = _table(rows, [62 * mm, 18 * mm, 18 * mm, 20 * mm, 18 * mm, 18 * mm, 24 * mm], align_right_from=1)
+                         f"{l.diff:+d}" if l.expected is not None else "-", "OK" if l.ok else "MISMATCH"])
+        rows.append(["Total", str(s.total_expected), str(s.total_counted), f"{s.total_counted - s.total_expected:+d}", ""])
+        t = _table(rows, [78 * mm, 24 * mm, 24 * mm, 24 * mm, 28 * mm], align_right_from=1)
         story.append(t)
         # snapshots
         snaps = [r["snapshot"] for r in self.db.q("SELECT snapshot FROM count_events WHERE session_id=? AND snapshot "
                                                   "IS NOT NULL ORDER BY ts LIMIT 12", (sid,)) if Path(r["snapshot"]).exists()]
         if snaps:
             from reportlab.platypus import Table
-            story += [Spacer(1, 10), Paragraph("<b>Counted item snapshots</b> (first 12 of the session)", ss["Normal"]),
+            story += [Spacer(1, 10), Paragraph("<b>Photos</b>", ss["Normal"]),
                       Spacer(1, 4)]
-            cells = [Image(p, width=42 * mm, height=26 * mm, kind="proportional") for p in snaps]
+            cells = [Image(p, width=42 * mm, height=26 * mm, kind="proportional") for p in _without_caption(snaps)]
             grid = [cells[i:i + 4] for i in range(0, len(cells), 4)]
             grid[-1] += [""] * (4 - len(grid[-1]))
             story.append(Table(grid, colWidths=[44.5 * mm] * 4))
-        ev = self.db.q("SELECT kind, path, sha256 FROM evidence_files WHERE session_id=? AND kind IN ('clip','plate')", (sid,))
-        if ev:
-            story += [Spacer(1, 10), Paragraph("<b>Evidence integrity (SHA-256)</b>", ss["Normal"])]
-            for r in ev:
-                story.append(Paragraph(f"{r['kind']}: {Path(r['path']).name}<br/><font face='Courier' size='7'>{r['sha256']}</font>",
-                                       ss["Small"]))
         story += [Spacer(1, 18), _kv_table([["Gate clerk signature", "____________________"],
                                             ["Supervisor signature", "____________________"],
                                             ["Driver signature", "____________________"]], [48 * mm, 80 * mm])]
