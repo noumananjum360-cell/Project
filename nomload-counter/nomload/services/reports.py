@@ -164,18 +164,33 @@ class _Doc:
         c.saveState()
         logo = self.company.get("logo")
         x = 16 * mm
+        has_logo = False
         if logo and Path(logo).exists():
             try:
-                c.drawImage(logo, x, h - 28 * mm, width=22 * mm, height=18 * mm, preserveAspectRatio=True, mask="auto")
-                x += 25 * mm
+                from reportlab.lib.utils import ImageReader
+                iw, ih = ImageReader(logo).getSize()
+                lh = 16 * mm                                  # logo height
+                lw = min(70 * mm, lh * iw / max(1, ih))       # keep its shape, at most 70 mm wide
+                lh = lw * ih / max(1, iw)
+                c.drawImage(logo, x, h - 11 * mm - lh, width=lw, height=lh, mask="auto")
+                x += lw + 4 * mm
+                has_logo = True
             except Exception:
                 pass
-        c.setFillColor(HexColor(NAVY))
-        c.setFont("Helvetica-Bold", 13)
-        c.drawString(x, h - 17 * mm, self.company.get("name", ""))
+        show_name = self.company.get("show_name") or not has_logo
+        if show_name and self.company.get("name"):
+            c.setFillColor(HexColor(NAVY))
+            c.setFont("Helvetica-Bold", 13)
+            c.drawString(x, h - 17 * mm, self.company.get("name", ""))
+            addr_y = h - 22 * mm
+        else:
+            addr_y = h - 19.5 * mm
         c.setFont("Helvetica", 8.5)
         c.setFillColor(HexColor(GREY))
-        c.drawString(x, h - 22 * mm, self.company.get("address", "")[:110])
+        addr, room = self.company.get("address", ""), (w - 64 * mm) - x   # stop before the logo on the right
+        while addr and c.stringWidth(addr, "Helvetica", 8.5) > room:
+            addr = addr[:-1]
+        c.drawString(x, addr_y, addr)
         wm = assets_dir() / "wordmark.png"
         if wm.exists():
             c.drawImage(str(wm), w - 62 * mm, h - 26 * mm, width=46 * mm, height=11.5 * mm, mask="auto")
@@ -248,7 +263,8 @@ class ReportService:
 
     def _company(self) -> dict:
         return {"name": self.settings.get("company_name") or "", "address": self.settings.get("company_address") or "",
-                "logo": self.settings.get("company_logo") or ""}
+                "logo": self.settings.get("company_logo") or "",
+                "show_name": bool(self.settings.get("report_show_company_name"))}
 
     def _wm(self) -> bool:
         try:

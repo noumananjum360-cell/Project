@@ -101,10 +101,14 @@ class SettingsPage(QWidget):
         self._show_logo()
         lb = button("Choose logo...")
         lb.clicked.connect(self.choose_logo)
+        rb = button("Remove logo")
+        rb.clicked.connect(self.remove_logo)
         lh.addWidget(self.logo_lbl)
         lh.addWidget(lb)
+        lh.addWidget(rb)
         lh.addStretch(1)
         f.addRow(_("Logo on reports"), lh)
+        f.addRow("", check("report_show_company_name", "Show company name next to the logo"))
         lang = QComboBox()
         for k, v in LANGUAGES.items():
             lang.addItem(v, k)
@@ -274,6 +278,11 @@ class SettingsPage(QWidget):
                                                       Qt.TransformationMode.SmoothTransformation))
         else:
             self.logo_lbl.setText(_("(none)"))
+
+    def remove_logo(self):
+        self.app.settings.set("company_logo", "")
+        self.logo_lbl.clear()
+        self._show_logo()
 
     def choose_logo(self):
         p, _f = QFileDialog.getOpenFileName(self, _("Company logo"), "", "Images (*.png *.jpg *.jpeg)")

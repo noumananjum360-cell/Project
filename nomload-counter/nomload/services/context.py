@@ -74,6 +74,7 @@ DEFAULT_SETTINGS = {
     "truck_present_start_s": 5,
     "auto_close_on_truck_exit": True,
     "auto_plate_read": True,
+    "report_show_company_name": False,   # with a logo: logo only (the name is usually in the logo)
     "sound_alerts": True,
     "alert_volume": 0.9,
     "language": "en",
