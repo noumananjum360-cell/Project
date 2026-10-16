@@ -181,9 +181,16 @@ class BayRuntime(threading.Thread):
             self.status["message"] = "No counting camera configured for this bay"
             self.listener.frame(self.bay.id, None, dict(self.status))
             return
+        from nomload.core.sysutil import lower_thread_priority
+        lower_thread_priority()
         self.src.start()
         if self.plate_src:
             self.plate_src.start()
+        # Live cameras send 25-30 fps; counting needs about 15. Analysing a file
+        # (lockstep) still uses every frame.
+        max_fps = float(self.app.settings.get("max_process_fps") or 0)
+        period = 1.0 / max_fps if max_fps > 0 and not self.src.lockstep else 0.0
+        next_t = 0.0
         last_id = -1
         n = 0
         t_fps = time.time()
@@ -199,6 +206,10 @@ class BayRuntime(threading.Thread):
                 continue
             last_id, ts, frame = got
             self._check_offline()
+            if period:
+                if ts < next_t:
+                    continue
+                next_t = max(next_t + period, ts - period)
             n += 1
             if self.skip and n % (self.skip + 1):
                 continue

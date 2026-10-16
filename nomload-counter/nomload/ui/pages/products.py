@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog
 
 from nomload.config import COUNTABLE_CLASSES, DEFAULT_CLASSES, data_home
 from nomload.i18n import _
-from nomload.ui.widgets import Card, PageHeader, button, error, fill_table, info, make_table, selected_data
+from nomload.ui.widgets import Card, PageHeader, button, confirm, error, fill_table, info, make_table, selected_data
 
 
 class ProductsPage(QWidget):
@@ -24,6 +24,8 @@ class ProductsPage(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(28, 22, 28, 22)
         hdr = PageHeader("Products")
+        self.del_btn = hdr.add(button("Delete product", icon_name="x"))
+        self.del_btn.clicked.connect(self.delete)
         new = hdr.add(button("New product", "Primary", "plus"))
         new.clicked.connect(self.new)
         lay.addWidget(hdr)
@@ -83,6 +85,7 @@ class ProductsPage(QWidget):
 
     def showEvent(self, e):
         super().showEvent(e)
+        self.del_btn.setVisible(bool(self.app.user and self.app.user.can("manage_products")))
         self.cls.clear()
         classes = list(COUNTABLE_CLASSES)
         det = self.app.registry.detector
@@ -148,6 +151,22 @@ class ProductsPage(QWidget):
             return
         self.reload()
         info(self, _("Product saved."))
+
+    def delete(self):
+        pid = selected_data(self.table)
+        p = next((x for x in self._ps if x.id == pid), None)
+        if not p:
+            error(self, _("Select a product first."))
+            return
+        if not confirm(self, f"{_('Delete product')} {p.name}?"):
+            return
+        try:
+            self.app.products.delete(self.app.user, p.id)
+        except ValueError as e:
+            error(self, str(e))
+            return
+        self.reload()
+        self.new()
 
     def add_samples(self):
         if not self.pid:

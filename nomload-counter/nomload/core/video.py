@@ -161,6 +161,8 @@ class VideoSource(threading.Thread):
             return self._frame_id, self._ts, self._frame
 
     def run(self):
+        from nomload.core.sysutil import lower_thread_priority
+        lower_thread_priority()
         backoff = 1.0
         while not self._stop.is_set():
             cap = self.spec.open()

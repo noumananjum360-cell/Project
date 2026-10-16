@@ -73,3 +73,37 @@ def test_old_database_is_upgraded(home):
     a = AppServices()
     assert a.gate_passes.by_number("OLD-1") is not None
     a.db.close()
+
+
+def test_unused_product_is_removed(app):
+    pid = app.products.save(app.user, "Test product", "bag")
+    app.products.delete(app.user, pid)
+    assert app.products.get(pid) is None
+    app.products.save(app.user, "Test product", "bag")  # the name can be used again
+
+
+def test_product_on_open_gate_pass_cannot_be_removed(app):
+    _gp(app)
+    flour = app.products.by_name("Flour 50kg bag")
+    with pytest.raises(ValueError, match="open gate pass"):
+        app.products.delete(app.user, flour.id)
+
+
+def test_used_product_is_hidden_and_history_kept(app):
+    bid = app.bays.save_bay(app.user, "B")
+    gid = _gp(app)
+    sid = app.sessions.start(bid, app.user, gid)
+    app.sessions.close(sid, app.user)
+    app.gate_passes.set_status(gid, "completed", app.user)
+    flour = app.products.by_name("Flour 50kg bag")
+    app.products.delete(app.user, flour.id)
+    assert all(p.id != flour.id for p in app.products.list())
+    assert app.products.by_name("Flour 50kg bag") is None
+    assert app.sessions.summary(sid).lines[0].product_id == flour.id   # old loading still shows it
+    app.products.save(app.user, "Flour 50kg bag", "bag")  # can be added again
+
+
+def test_clerk_cannot_remove_products(app):
+    pid = app.products.save(app.user, "Test product", "bag")
+    with pytest.raises(ValueError):
+        app.products.delete(User(9, "c", "", "clerk"), pid)

@@ -119,6 +119,7 @@ class SettingsPage(QWidget):
         f.addRow(_("Detector confidence threshold"), dspin("detector_conf", 0.05, 0.95, 0.05))
         # performance
         cd, f = card("Performance", 1, 0)
+        f.addRow(_("Frames analysed per second"), spin("max_process_fps", 4, 30, " fps"))
         f.addRow(_("Skip frames between analyses"), spin("frame_skip", 0, 10))
         f.addRow(_("Max processing width"), spin("max_process_width", 320, 1920, " px"))
         f.addRow(_("Inference threads (0 = auto)"), spin("inference_threads", 0, 32))
@@ -305,7 +306,7 @@ class SettingsPage(QWidget):
             s.set("remote_events", ev)
             changed["remote_events"] = ev
         audit(self.app.db, self.app.user, "settings_changed", "settings", "", changed)
-        restart_keys = {"frame_skip", "max_process_width", "use_gpu", "inference_threads", "detector_conf",
+        restart_keys = {"frame_skip", "max_process_fps", "max_process_width", "use_gpu", "inference_threads", "detector_conf",
                         "review_threshold", "preroll_s", "clip_fps", "tamper_enabled", "tamper_persist_s",
                         "paddle_rec_model", "paddle_rec_dict"}
         if restart_keys & set(changed):

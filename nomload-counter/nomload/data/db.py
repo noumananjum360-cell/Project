@@ -63,7 +63,8 @@ CREATE TABLE IF NOT EXISTS products (
     tolerance_pct REAL,
     active INTEGER NOT NULL DEFAULT 1,
     notes TEXT NOT NULL DEFAULT '',
-    created_at REAL NOT NULL
+    created_at REAL NOT NULL,
+    deleted INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS product_samples (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -215,6 +216,9 @@ class Database:
             cols = {r[1] for r in c.execute("PRAGMA table_info(gate_passes)")}
             if "deleted" not in cols:
                 c.execute("ALTER TABLE gate_passes ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0")
+            cols = {r[1] for r in c.execute("PRAGMA table_info(products)")}
+            if "deleted" not in cols:
+                c.execute("ALTER TABLE products ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0")
             c.execute("INSERT OR IGNORE INTO meta(key, value) VALUES ('schema_version', ?)", (str(SCHEMA_VERSION),))
             c.execute("INSERT OR IGNORE INTO meta(key, value) VALUES ('created_at', ?)", (str(time.time()),))
 

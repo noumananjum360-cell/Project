@@ -35,7 +35,7 @@ class ProductService:
                        r["tolerance_units"], r["tolerance_pct"], bool(r["active"]), r["notes"])
 
     def list(self, active_only=False) -> list[Product]:
-        sql = "SELECT * FROM products" + (" WHERE active=1" if active_only else "") + " ORDER BY name"
+        sql = "SELECT * FROM products WHERE deleted=0" + (" AND active=1" if active_only else "") + " ORDER BY name"
         return [self._row(r) for r in self.db.q(sql)]
 
     def get(self, pid: int) -> Product | None:
@@ -43,7 +43,8 @@ class ProductService:
         return self._row(r) if r else None
 
     def by_name(self, name: str) -> Product | None:
-        r = self.db.one("SELECT * FROM products WHERE name=? COLLATE NOCASE OR (sku<>'' AND sku=? COLLATE NOCASE)",
+        r = self.db.one("SELECT * FROM products WHERE deleted=0 AND (name=? COLLATE NOCASE OR "
+                        "(sku<>'' AND sku=? COLLATE NOCASE))",
                         (name.strip(), name.strip()))
         return self._row(r) if r else None
 
@@ -65,6 +66,30 @@ class ProductService:
                                int(active), time.time()))
         audit(self.db, actor, "product_created", "product", pid, {"name": name})
         return pid
+
+    def delete(self, actor: User, pid: int):
+        """Remove a product. Never-used products are deleted; products already on gate passes
+        or counted in a loading are hidden so their history and reports stay correct."""
+        if not actor.can("manage_products"):
+            raise ValueError("Only a supervisor or admin can remove products.")
+        r = self.db.one("SELECT name FROM products WHERE id=? AND deleted=0", (pid,))
+        if r is None:
+            return
+        open_gp = self.db.q("SELECT DISTINCT g.number FROM gate_pass_items i JOIN gate_passes g ON g.id=i.gate_pass_id "
+                            "WHERE i.product_id=? AND g.status IN ('open','loading') AND g.deleted=0", (pid,))
+        if open_gp:
+            raise ValueError(f"{r['name']} is on open gate pass(es) {', '.join(x['number'] for x in open_gp[:5])}. "
+                             "Complete, cancel or edit those gate passes first.")
+        used = (self.db.scalar("SELECT COUNT(*) FROM gate_pass_items WHERE product_id=?", (pid,)) or 0) + \
+               (self.db.scalar("SELECT COUNT(*) FROM count_events WHERE product_id=?", (pid,)) or 0)
+        with self.db.tx() as c:
+            if used:
+                c.execute("UPDATE products SET deleted=1, active=0, name=? WHERE id=?",
+                          (f"{r['name']} (deleted #{pid})", pid))
+            else:
+                c.execute("DELETE FROM product_samples WHERE product_id=?", (pid,))
+                c.execute("DELETE FROM products WHERE id=?", (pid,))
+        audit(self.db, actor, "product_deleted", "product", pid, {"name": r["name"], "kept_for_history": bool(used)})
 
     def add_sample(self, pid: int, path: str):
         self.db.execute("INSERT INTO product_samples(product_id, path, created_at) VALUES (?,?,?)", (pid, path, time.time()))

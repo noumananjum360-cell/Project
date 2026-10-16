@@ -67,6 +67,13 @@ def run_gui() -> int:
     win = MainWindow(app)
     win.showMaximized()
     splash.finish(win)
+    from PySide6.QtCore import QTimer
+    from nomload.core.sysutil import UiWatchdog
+    dog = UiWatchdog()
+    beat = QTimer()
+    beat.timeout.connect(dog.alive)
+    beat.start(250)
+    dog.start()
     rc = qapp.exec()
     app.shutdown()
     return rc
