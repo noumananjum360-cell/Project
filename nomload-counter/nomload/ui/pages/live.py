@@ -12,12 +12,17 @@ from nomload.i18n import _
 from nomload.services.sessions import SessionError
 from nomload.ui import icons
 from nomload.ui.dialogs import GatePassPicker, PlateDialog, ReviewDialog, SessionResultDialog, ask_supervisor
-from nomload.ui.widgets import PageHeader, Pill, VideoView, button, confirm, error, info
+from nomload.ui.widgets import PageHeader, Pill, VideoView, button, confirm, error, info, run_async
 
 
 def fmt_elapsed(s: float) -> str:
     s = int(max(0, s))
     return f"{s // 3600:02d}:{s % 3600 // 60:02d}:{s % 60:02d}"
+
+
+def _restyle(w, css: str):
+    if w.styleSheet() != css:
+        w.setStyleSheet(css)
 
 
 class BayWidget(QFrame):
@@ -182,8 +187,8 @@ class BayWidget(QFrame):
         if not active:
             self.summary = None
             self.status_lbl.setText(_("IDLE") if self.page.compact else _("IDLE - no truck loading"))
-            self.status_lbl.setStyleSheet(f"background:{theme.c('surface_alt')}; color:{theme.c('muted')}; "
-                                          "border-radius:8px; padding:4px 12px; font-weight:700;")
+            _restyle(self.status_lbl, f"background:{theme.c('surface_alt')}; color:{theme.c('muted')}; "
+                                      "border-radius:8px; padding:4px 12px; font-weight:700;")
             self.count_lbl.setText("0")
             self.exp_lbl.setText("/ -")
             self.progress.setValue(0)
@@ -197,8 +202,8 @@ class BayWidget(QFrame):
         s = self.app.sessions.summary(sid)
         self.summary = s
         self.status_lbl.setText(_("LOADING") + (f"  ·  {_('auto-started')}" if s.auto_started else ""))
-        self.status_lbl.setStyleSheet(f"background:{theme.c('primary')}; color:white; border-radius:8px; "
-                                      "padding:4px 12px; font-weight:700;")
+        _restyle(self.status_lbl, f"background:{theme.c('primary')}; color:white; border-radius:8px; "
+                                  "padding:4px 12px; font-weight:700;")
         self.count_lbl.setText(str(s.total_counted))
         exp = s.total_expected if s.gate_pass else None
         self.exp_lbl.setText(f"/ {exp}" if exp is not None else "/ -")
@@ -224,13 +229,18 @@ class BayWidget(QFrame):
         self._set_products(s.lines)
 
     def _set_products(self, lines):
+        rt = self.rt
+        key = (tuple((l.product_id, l.name, l.counted, l.expected, l.pending, l.ok) for l in lines),
+               rt.active_product_id if rt else None)
+        if key == getattr(self, "_products_key", None):
+            return  # unchanged: don't rebuild the widgets
+        self._products_key = key
         while self.products_box.count():
             it = self.products_box.takeAt(0)
             if it.widget():
                 it.widget().deleteLater()
         for b in self.product_group.buttons():
             self.product_group.removeButton(b)
-        rt = self.rt
         active = rt.active_product_id if rt else None
         for l in lines:
             w = QWidget()
@@ -272,12 +282,14 @@ class BayWidget(QFrame):
             self._truck_shown = status["truck"]
             self.on_truck(status["truck"])
         t = status.get("tamper", "ok")
-        self.tamper_pill.setVisible(t != "ok")
+        if self.tamper_pill.isVisibleTo(self) != (t != "ok"):
+            self.tamper_pill.setVisible(t != "ok")
         if t != "ok":
             self.tamper_pill.set_state(f"⚠ {t}", "bad")
         perf = f"{status.get('fps', 0):.0f} fps · {status.get('infer_ms', 0):.0f} ms"
-        self.fps.setText(perf)
-        self.cam_pill.setToolTip(perf)
+        if perf != self.fps.text():
+            self.fps.setText(perf)
+            self.cam_pill.setToolTip(perf)
 
     def on_count(self, ev):
         if ev.get("session_id") and ev["session_id"] == self.session_id:
@@ -294,10 +306,8 @@ class BayWidget(QFrame):
         d = GatePassPicker(self, self.app)
         if not d.exec():
             return
-        try:
-            self.rt.start_session(self.app.user, d.gate_pass_id)
-        except SessionError as e:
-            error(self, str(e))
+        rt, user, gid = self.rt, self.app.user, d.gate_pass_id
+        run_async(self, lambda: rt.start_session(user, gid), busy=_("Starting loading..."))
 
     def close_session(self):
         if not self.session_id or not self.rt:
@@ -309,11 +319,8 @@ class BayWidget(QFrame):
                 s = self.app.sessions.summary(self.session_id)
         if not confirm(self, _("Close loading for this truck and compare with the gate pass?")):
             return
-        summary = self.rt.close_session(self.app.user)
-        if summary:
-            self.page.main.sound.play("chime" if summary.status == "cleared" else "beep")
-            SessionResultDialog(self, self.app, summary, self.page.main.sound).exec()
-            self.page.main.refresh_status()
+        rt, user = self.rt, self.app.user
+        run_async(self, lambda: rt.close_session(user), self.page.show_result, busy=_("Verifying the load..."))
 
     def cancel_session(self):
         if not self.session_id:
@@ -321,7 +328,8 @@ class BayWidget(QFrame):
         sup, reason = ask_supervisor(self, self.app, _("Cancel this loading session? Counts are kept in the audit trail."),
                                      need_reason=True)
         if sup:
-            self.rt.cancel_session(sup, reason)
+            rt = self.rt
+            run_async(self, lambda: rt.cancel_session(sup, reason), busy=_("Cancelling..."))
 
     def review(self):
         if not self.session_id:
@@ -458,6 +466,12 @@ class LiveBaysPage(QWidget):
             from PySide6.QtCore import QTimer
             QTimer.singleShot(0, self._layout)
 
+    def show_result(self, summary):
+        if summary:
+            self.main.sound.play("chime" if summary.status == "cleared" else "beep")
+            SessionResultDialog(self, self.app, summary, self.main.sound).exec()
+            self.main.refresh_status()
+
     def focus_bay(self, w):
         self.focused = None if (w is None or self.focused is w) else w
         self._layout()
@@ -502,10 +516,8 @@ class LiveBaysPage(QWidget):
                 w.refresh()
         elif kind == "truck_left":
             if self.app.settings.get("auto_close_on_truck_exit") and w.rt and w.session_id:
-                summary = w.rt.close_session(None)
-                if summary:
-                    self.main.sound.play("chime" if summary.status == "cleared" else "beep")
-                    SessionResultDialog(self, self.app, summary, self.main.sound).exec()
+                rt = w.rt
+                run_async(self, lambda: rt.close_session(None), self.show_result)
                 return
             self.main.toast({"severity": "warning", "title": _("Truck left the bay"),
                              "message": f"{w.bay.name}: {_('the truck is no longer visible. Close & verify the loading now.')}"})

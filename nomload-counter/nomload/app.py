@@ -44,6 +44,10 @@ def run_gui() -> int:
         qapp.processEvents()
 
     msg("Opening database...")
+    import cv2
+    cv2.setNumThreads(2)  # several bay threads share the CPU with the window
+    from nomload.licensing.license import hardware_fingerprint
+    hardware_fingerprint()  # slow on Windows (PowerShell); done once here, then cached
     app = AppServices()
     theme.set_mode(app.settings.get("theme") or "light")
     i18n.set_language(app.settings.get("language") or "en")

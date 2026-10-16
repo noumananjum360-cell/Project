@@ -4,10 +4,11 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QTimer, QUrl, Signal
+from PySide6.QtCore import QObject, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QApplication
 
@@ -94,9 +95,28 @@ class QtBridge(QObject, RuntimeListener):
     plate_read = Signal(int, str, float, object)
     prompted = Signal(int, str, dict)
     alert = Signal(dict)
+    _frame_waiting = Signal(int)
+
+    def __init__(self, parent=None):
+        QObject.__init__(self, parent)
+        self._flock = threading.Lock()
+        self._latest: dict[int, tuple] = {}
+        self._frame_waiting.connect(self._deliver_frame, Qt.ConnectionType.QueuedConnection)
 
     def frame(self, bay_id, frame, status):
-        self.frame_ready.emit(bay_id, frame, status)
+        # Keep only the newest frame per bay. If the window is busy for a moment the
+        # old frames are dropped instead of piling up in the event queue.
+        with self._flock:
+            pending = bay_id in self._latest
+            self._latest[bay_id] = (frame, status)
+        if not pending:
+            self._frame_waiting.emit(bay_id)
+
+    def _deliver_frame(self, bay_id):
+        with self._flock:
+            item = self._latest.pop(bay_id, None)
+        if item is not None:
+            self.frame_ready.emit(bay_id, item[0], item[1])
 
     def count(self, bay_id, event):
         self.counted.emit(bay_id, event)

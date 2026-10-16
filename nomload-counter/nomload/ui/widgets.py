@@ -92,6 +92,10 @@ class Pill(QLabel):
         self.set_state(text, "muted")
 
     def set_state(self, text: str, state: str):
+        # called for every video frame: restyling is expensive, so only on a real change
+        if getattr(self, "_shown", None) == (text, state, theme.mode()):
+            return
+        self._shown = (text, state, theme.mode())
         colors = {"ok": (theme.c("success_soft"), theme.c("success")), "bad": (theme.c("danger_soft"), theme.c("danger")),
                   "warn": (theme.c("accent_soft"), "#9A6511"), "muted": (theme.c("surface_alt"), theme.c("muted")),
                   "info": (theme.c("nav_active"), theme.c("primary") if theme.mode() == "light" else theme.c("text"))}
@@ -191,34 +195,50 @@ def _nice_step(vmax: float) -> float:
     return 10 * mag
 
 
-class VideoView(QLabel):
-    """Shows BGR frames scaled to fit while keeping aspect ratio."""
+class VideoView(QFrame):
+    """Shows BGR frames scaled to fit while keeping aspect ratio.
+
+    Frames are painted directly. (A QLabel pixmap would re-run the page layout on
+    every frame, which made the live page flicker and freeze.)
+    """
     double_clicked = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setMinimumSize(320, 180)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.setStyleSheet(f"background:{theme.c('video_bg')}; border-radius: 10px; color: #9AA5BC;")
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, False)
         self._img: QImage | None = None
-        self.setText(_("No video"))
+        self._text = _("No video")
 
     def set_frame(self, frame: np.ndarray | None, message: str = ""):
         if frame is None:
-            self._img = None
-            self.setPixmap(QPixmap())
-            self.setText(message or _("No video"))
-            return
-        self._img = bgr_to_qimage(frame)
-        self._refresh()
+            text = message or _("No video")
+            if self._img is None and text == self._text:
+                return
+            self._img, self._text = None, text
+        else:
+            self._img = bgr_to_qimage(frame)
+        self.update()
 
-    def _refresh(self):
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(self.rect()), 10, 10)
+        p.fillPath(path, QColor(theme.c("video_bg")))
         if self._img is None:
+            p.setPen(QColor("#9AA5BC"))
+            p.drawText(self.rect().adjusted(12, 0, -12, 0), Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
+                       self._text)
             return
-        pm = QPixmap.fromImage(self._img).scaled(self.size(), Qt.AspectRatioMode.KeepAspectRatio,
-                                                 Qt.TransformationMode.SmoothTransformation)
-        self.setPixmap(pm)
+        iw, ih = self._img.width(), self._img.height()
+        sc = min(self.width() / iw, self.height() / ih)
+        w, h = iw * sc, ih * sc
+        r = QRectF((self.width() - w) / 2, (self.height() - h) / 2, w, h)
+        p.setClipPath(path)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        p.drawImage(r, self._img)
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
@@ -226,13 +246,9 @@ class VideoView(QLabel):
         mh = max(self.minimumHeight(), int(self.width() * 9 / 16))
         if self.maximumHeight() != mh:
             self.setMaximumHeight(mh)
-        self._refresh()
 
     def mouseDoubleClickEvent(self, e):
         self.double_clicked.emit()
-
-    def heightForWidth(self, w):
-        return int(w * 9 / 16)
 
     def sizeHint(self):
         return QSize(640, 360)

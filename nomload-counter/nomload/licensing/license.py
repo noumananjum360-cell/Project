@@ -104,11 +104,24 @@ def _win_board_serial() -> str:
         return ""
 
 
+_FP_CACHE: list[bytes] = []
+
+
 def hardware_fingerprint() -> bytes:
-    """Stable 16-byte machine fingerprint."""
+    """Stable 16-byte machine fingerprint.
+
+    Reading the board serial starts PowerShell, which takes seconds on Windows,
+    so the result is computed once per run (the hardware cannot change meanwhile).
+    """
     override = os.environ.get("NOMLOAD_FINGERPRINT")  # tests
     if override:
         return hashlib.sha256(override.encode()).digest()[:16]
+    if not _FP_CACHE:
+        _FP_CACHE.append(_compute_fingerprint())
+    return _FP_CACHE[0]
+
+
+def _compute_fingerprint() -> bytes:
     parts = []
     if sys.platform == "win32":
         parts += [_win_machine_guid(), _win_volume_serial(), _win_board_serial(),

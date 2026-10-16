@@ -17,6 +17,7 @@ from __future__ import annotations
 import ast
 import json
 import logging
+import os
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -61,14 +62,23 @@ def choose_providers(use_gpu: bool) -> list[str]:
     return order
 
 
+def default_threads() -> int:
+    n = os.cpu_count() or 2
+    return max(1, min(4, n // 2))
+
+
 class OnnxDetector:
     def __init__(self, path: str | Path, use_gpu: bool = False, threads: int = 0,
                  conf_threshold: float = 0.3, class_thresholds: dict | None = None):
         import onnxruntime as ort
         self.path = str(path)
         so = ort.SessionOptions()
-        if threads:
-            so.intra_op_num_threads = int(threads)
+        # Leave cores for the window and the cameras: by default ONNX Runtime takes every
+        # core and busy-spins between frames, which starves the UI ("Not responding").
+        so.intra_op_num_threads = int(threads) if threads else default_threads()
+        so.inter_op_num_threads = 1
+        so.add_session_config_entry("session.intra_op.allow_spinning", "0")
+        so.add_session_config_entry("session.inter_op.allow_spinning", "0")
         so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         self.providers = choose_providers(use_gpu)
         self.session = ort.InferenceSession(self.path, so, providers=self.providers)

@@ -31,6 +31,15 @@ CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 GLYPH_W, GLYPH_H = 16, 24
 
 
+def _small_session(ort):
+    """Plate models are tiny: one thread, no busy-spinning (keeps the UI responsive)."""
+    so = ort.SessionOptions()
+    so.intra_op_num_threads = 1
+    so.inter_op_num_threads = 1
+    so.add_session_config_entry("session.intra_op.allow_spinning", "0")
+    return so
+
+
 @dataclass
 class PlateRead:
     text: str
@@ -143,7 +152,7 @@ class CharOCR:
 
     def __init__(self, path: str | Path):
         import onnxruntime as ort
-        self.sess = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
+        self.sess = ort.InferenceSession(str(path), _small_session(ort), providers=["CPUExecutionProvider"])
         meta = self.sess.get_modelmeta().custom_metadata_map
         self.charset = meta.get("charset", CHARSET)
         self.inp = self.sess.get_inputs()[0].name
@@ -168,7 +177,7 @@ class PaddleRecOCR:
 
     def __init__(self, path: str | Path, dict_path: str | Path, height: int = 48):
         import onnxruntime as ort
-        self.sess = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
+        self.sess = ort.InferenceSession(str(path), _small_session(ort), providers=["CPUExecutionProvider"])
         self.inp = self.sess.get_inputs()[0].name
         chars = Path(dict_path).read_text(encoding="utf-8").splitlines()
         self.chars = ["<blank>"] + chars + [" "]
