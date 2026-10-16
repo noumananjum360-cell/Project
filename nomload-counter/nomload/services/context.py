@@ -73,6 +73,7 @@ DEFAULT_SETTINGS = {
     "truck_absent_close_s": 45,
     "truck_present_start_s": 5,
     "auto_close_on_truck_exit": True,
+    "auto_plate_read": True,
     "sound_alerts": True,
     "alert_volume": 0.9,
     "language": "en",

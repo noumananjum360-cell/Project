@@ -77,7 +77,7 @@ class BayWidget(QFrame):
         self.plate_conf.setObjectName("Muted")
         self.plate_edit = QPushButton()
         self.plate_edit.setIcon(icons.icon("edit"))
-        self.plate_edit.setToolTip(_("Correct the plate"))
+        self.plate_edit.setToolTip(_("Enter the number plate"))
         self.plate_edit.clicked.connect(self.edit_plate)
         self.gp_lbl = QLabel(_("Gate pass: -"))
         self.gp_lbl.setWordWrap(True)

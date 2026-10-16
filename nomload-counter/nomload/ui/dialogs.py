@@ -157,7 +157,7 @@ class GatePassDialog(Base):
         self.number = QLineEdit(gate_pass.number if gate_pass else "")
         self.number.setPlaceholderText("e.g. GP-1001 or invoice number")
         self.vehicle = QLineEdit(gate_pass.vehicle_no if gate_pass else "")
-        self.vehicle.setPlaceholderText("e.g. LES-4721")
+        self.vehicle.setPlaceholderText(_("Vehicle number"))
         self.customer = QLineEdit(gate_pass.customer if gate_pass else "")
         self.driver = QLineEdit(gate_pass.driver_name if gate_pass else "")
         self.phone = QLineEdit(gate_pass.driver_phone if gate_pass else "")
@@ -276,7 +276,7 @@ class GatePassPicker(Base):
         bb.addWidget(ok)
         self.footer.addLayout(bb)
         self.gate_pass_id: int | None = None
-        self.search.setText(plate_hint)
+        self.plate_hint = plate_hint  # only pre-selects a matching row; the search box stays empty
         self.reload()
 
     def reload(self):
@@ -285,7 +285,10 @@ class GatePassPicker(Base):
                                                                             for i in g.items), g.total_expected]
                                 for g in gps], [g.id for g in gps])
         if gps:
-            self.table.selectRow(0)
+            from nomload.core.plate_formats import plates_match
+            hint = getattr(self, "plate_hint", "")
+            row = next((i for i, g in enumerate(gps) if hint and g.vehicle_no and plates_match(g.vehicle_no, hint, 1)), 0)
+            self.table.selectRow(row)
 
     def _new(self):
         d = GatePassDialog(self, self.app)
@@ -308,32 +311,36 @@ class GatePassPicker(Base):
 
 # ----------------------------------------------------------------- plate
 class PlateDialog(Base):
+    """Enter the number plate by hand. Saved exactly as typed (no format is forced)."""
+
     def __init__(self, parent, current: str = "", image: str | None = None):
-        super().__init__(parent, "Correct number plate", 460)
+        super().__init__(parent, "Number plate", 460)
         if image and Path(image).exists():
             l = QLabel()
             l.setPixmap(QPixmap(image).scaledToWidth(380, Qt.TransformationMode.SmoothTransformation))
             self.lay.addWidget(l)
-        self.edit = QLineEdit(current)
-        self.edit.setPlaceholderText("LES-4721")
+        if current:
+            read = QLabel(f"{_('Camera read')}: {current}")
+            read.setObjectName("Muted")
+            self.lay.addWidget(read)
+        self.edit = QLineEdit()
+        self.edit.setPlaceholderText(_("Type the number plate"))
+        self.edit.setMaxLength(20)
         self.edit.setStyleSheet("font-size: 26px; font-weight: 700; font-family: Consolas, monospace;")
         self.lay.addWidget(self.edit)
-        self.hint = QLabel("")
-        self.hint.setObjectName("Muted")
-        self.lay.addWidget(self.hint)
-        self.edit.textChanged.connect(self._hint)
         self.buttons("Save plate")
-        self._hint()
+        self.edit.setFocus()
 
-    def _hint(self):
-        from nomload.core.plate_formats import parse
-        p = parse(self.edit.text())
-        self.hint.setText(f"{_('Will be saved as')}: {p.text or '-'}   ({_('province')}: {p.province})")
+    def accept(self):
+        if not self.text:
+            from nomload.ui.widgets import error
+            error(self, _("Enter the number plate."))
+            return
+        super().accept()
 
     @property
     def text(self) -> str:
-        from nomload.core.plate_formats import parse
-        return parse(self.edit.text()).text or self.edit.text().strip().upper()
+        return " ".join(self.edit.text().split()).upper()
 
 
 # ----------------------------------------------------------------- review

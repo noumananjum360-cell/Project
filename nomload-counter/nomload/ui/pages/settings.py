@@ -137,6 +137,7 @@ class SettingsPage(QWidget):
         f.addRow(_("Auto-start after truck seen for"), spin("truck_present_start_s", 1, 120, " s"))
         f.addRow(_("Truck gone after"), spin("truck_absent_close_s", 5, 600, " s"))
         f.addRow("", check("auto_close_on_truck_exit", "Close && verify automatically when the truck leaves"))
+        f.addRow("", check("auto_plate_read", "Read number plates automatically (off: enter them by hand)"))
         # cameras
         cd, f = card("Cameras", 2, 0)
         f.addRow(_("Camera offline alert after"), spin("camera_offline_alert_s", 5, 3600, " s"))

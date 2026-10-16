@@ -256,7 +256,7 @@ class BayRuntime(threading.Thread):
             if self.recorder:
                 self.recorder.write(annotated, ts)
         # ---- plate
-        if sid and not self.plate_locked and n % 4 == 0:
+        if sid and not self.plate_locked and n % 4 == 0 and self.app.settings.get("auto_plate_read"):
             self._plate_logic(res)
         if ts - self._last_emit >= 1 / 15:
             self._last_emit = ts
