@@ -141,8 +141,12 @@ class Dataset:
                     counts[int(p[0])] += 1
         return {"images": len(imgs), "labeled": len(labeled), "per_class": dict(zip(self.classes, counts))}
 
-    def samples(self, split: str = "all", val_fraction: float = 0.15, seed: int = 0):
-        """Load labelled samples as (bgr, [(cls, x0,y0,x1,y1)]) - deterministic train/val split."""
+    def samples(self, split: str = "all", val_fraction: float = 0.15, seed: int = 0, max_width: int = 640):
+        """Load labelled samples as (bgr, [(cls, x0,y0,x1,y1)]) - deterministic train/val split.
+
+        Images are shrunk to ``max_width`` while loading: the detector works at 320 px, and
+        full-size phone/4K frames would need several GB of RAM for a few hundred images.
+        """
         imgs = [i for i in self.image_files() if self.is_labeled(i)]
         rng = random.Random(seed)
         rng.shuffle(imgs)
@@ -154,7 +158,12 @@ class Dataset:
             if im is None:
                 continue
             h, w = im.shape[:2]
-            out.append((im, [(c, x0, y0, x1, y1) for c, x0, y0, x1, y1 in self.read_labels(p, w, h)]))
+            boxes = self.read_labels(p, w, h)
+            if max_width and w > max_width:
+                k = max_width / w
+                im = cv2.resize(im, (max_width, max(1, round(h * k))), interpolation=cv2.INTER_AREA)
+                boxes = [(c, x0 * k, y0 * k, x1 * k, y1 * k) for c, x0, y0, x1, y1 in boxes]
+            out.append((im, boxes))
         return out
 
     def meta(self) -> dict:
@@ -165,6 +174,9 @@ class Dataset:
         m = self.meta()
         m.update(kw)
         (self.root / "meta.json").write_text(json.dumps(m, indent=2))
+
+
+MAX_FRAME_WIDTH = 1280  # frames are stored at most this wide (the detector uses 320 px)
 
 
 def extract_frames(video: str | Path, ds: Dataset, every_n: int = 15, max_frames: int = 300,
@@ -182,7 +194,10 @@ def extract_frames(video: str | Path, ds: Dataset, every_n: int = 15, max_frames
         if i % every_n == 0:
             small = cv2.resize(cv2.cvtColor(fr, cv2.COLOR_BGR2GRAY), (64, 36)).astype(np.float32)
             if not skip_similar or last_small is None or np.abs(small - last_small).mean() > 2.0:
-                cv2.imwrite(str(ds.images / f"{stem}_{i:06d}.jpg"), fr, [cv2.IMWRITE_JPEG_QUALITY, 92])
+                if fr.shape[1] > MAX_FRAME_WIDTH:  # 4K / phone video: keep the disk from filling up
+                    k = MAX_FRAME_WIDTH / fr.shape[1]
+                    fr = cv2.resize(fr, (MAX_FRAME_WIDTH, round(fr.shape[0] * k)), interpolation=cv2.INTER_AREA)
+                cv2.imwrite(str(ds.images / f"{stem}_{i:06d}.jpg"), fr, [cv2.IMWRITE_JPEG_QUALITY, 90])
                 saved += 1
                 last_small = small
         i += 1

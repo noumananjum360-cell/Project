@@ -164,6 +164,11 @@ CREATE TABLE IF NOT EXISTS remote_queue (
     sent_at REAL
 );
 
+CREATE TABLE IF NOT EXISTS evidence_purged (
+    path TEXT PRIMARY KEY,
+    purged_at REAL NOT NULL,
+    user_id INTEGER
+);
 CREATE TABLE IF NOT EXISTS evidence_files (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id INTEGER REFERENCES sessions(id),

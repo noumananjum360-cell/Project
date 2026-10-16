@@ -18,7 +18,7 @@ from nomload.licensing.license import request_code
 from nomload.services.alerts import KINDS
 from nomload.services.context import audit
 from nomload.ui.pages.common import open_folder
-from nomload.ui.widgets import Card, PageHeader, button, error, info
+from nomload.ui.widgets import Card, PageHeader, button, confirm, error, info
 
 
 class SettingsPage(QWidget):
@@ -241,6 +241,25 @@ class SettingsPage(QWidget):
         dh.addWidget(ob)
         dh.addWidget(bk)
         f.addRow(_("Data folder"), dh)
+        # storage
+        cd, f = card("Storage", 6, 0, 2)
+        self.storage_lbl = QLabel(_("Checking..."))
+        self.storage_lbl.setWordWrap(True)
+        f.addRow(_("Used by NomLoad"), self.storage_lbl)
+        ph = QHBoxLayout()
+        self.purge_days = QSpinBox()
+        self.purge_days.setRange(1, 3650)
+        self.purge_days.setValue(30)
+        self.purge_days.setSuffix(" " + _("days"))
+        self.purge_btn = button("Delete loading videos older than", icon_name="x")
+        self.purge_btn.clicked.connect(self.purge_videos)
+        ph.addWidget(self.purge_btn)
+        ph.addWidget(self.purge_days)
+        ph.addStretch(1)
+        f.addRow("", ph)
+        note = QLabel(_("Photos, number plates, counts and the audit trail are kept."))
+        note.setObjectName("Muted")
+        f.addRow("", note)
         lay.addStretch(1)
 
     def _file_row(self, key, flt):
@@ -268,6 +287,43 @@ class SettingsPage(QWidget):
         self.lic_status.setText(f"<span style='color:{col}'>{st.label}</span>{extra}{exp} &nbsp; "
                                 f"<span style='font-weight:400'>{st.message}</span>")
         self.queue_lbl.setText(f"{self.app.alerts.pending_count()} {_('message(s) waiting in the outbox')}")
+        self.purge_btn.setEnabled(bool(self.app.user and self.app.user.can("delete_records")))
+        self.refresh_storage()
+
+    def refresh_storage(self):
+        from nomload.services import storage
+        from nomload.ui.widgets import run_async
+        run_async(self, storage.usage, self._show_storage, lambda _m: None)
+
+    def _show_storage(self, u):
+        def mb(b):
+            return f"{b / 1e9:.1f} GB" if b >= 1e9 else f"{b / 1e6:.0f} MB"
+        col = theme.c("danger") if u["free_gb"] < 10 else theme.c("text")
+        self.storage_lbl.setText(
+            f"{_('Loading videos')}: <b>{mb(u['videos'])}</b> · {_('Photos')}: {mb(u['photos'])} · "
+            f"{_('Training data')}: {mb(u['datasets'])} · {_('Models')}: {mb(u['models'])} · {_('Logs')}: {mb(u['logs'])}"
+            f"<br><span style='color:{col}; font-weight:600'>{_('Free on this drive')}: {u['free_gb']:.1f} GB</span>")
+
+    def purge_videos(self):
+        from nomload.services import storage
+        days = self.purge_days.value()
+        files = storage.old_videos(self.app.db, days)
+        if not files:
+            info(self, _("No loading videos older than that."))
+            return
+        size = sum(p.stat().st_size for _sid, p in files if p.exists())
+        if not confirm(self, f"{_('Delete')} {len(files)} {_('loading video(s)')} ({size / 1e6:.0f} MB) "
+                             f"{_('older than')} {days} {_('days')}?"):
+            return
+        from nomload.ui.widgets import run_async
+
+        def done(res):
+            n, freed = res
+            info(self, f"{n} {_('video(s) deleted')}, {freed / 1e6:.0f} MB {_('freed')}.")
+            self.refresh_storage()
+            self.main.refresh_status()
+        run_async(self, lambda: storage.purge_old_videos(self.app.db, self.app.user, days), done,
+                  busy=_("Deleting old videos..."))
 
     def _show_logo(self):
         p = self.app.settings.get("company_logo")

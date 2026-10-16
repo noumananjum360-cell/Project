@@ -262,7 +262,7 @@ class BayRuntime(threading.Thread):
                                                       "product": None, "units": 1})
             annotated = self.engine.annotate(res)
             self.buffer.push(annotated, ts)
-            if self.recorder:
+            if self.recorder and self._disk_ok(ts):
                 self.recorder.write(annotated, ts)
         # ---- plate
         if sid and not self.plate_locked and n % 4 == 0 and self.app.settings.get("auto_plate_read"):
@@ -270,6 +270,20 @@ class BayRuntime(threading.Thread):
         if ts - self._last_emit >= 1 / 15:
             self._last_emit = ts
             self.listener.frame(self.bay.id, annotated, dict(self.status))
+
+    def _disk_ok(self, ts: float) -> bool:
+        """Stop writing the loading video when the drive is almost full (Windows needs the space)."""
+        if ts - getattr(self, "_disk_checked", 0.0) > 30:
+            from nomload.config import evidence_dir
+            from nomload.core.sysutil import free_disk_gb
+            self._disk_checked = ts
+            was = getattr(self, "_disk_ok_flag", True)
+            self._disk_ok_flag = free_disk_gb(evidence_dir()) >= 1.0
+            if was and not self._disk_ok_flag:
+                self.app.alerts.raise_alert("disk_full", f"{self.bay.name}: less than 1 GB free on the drive - "
+                                            "loading video recording paused. Free up space (Settings → Storage).",
+                                            self.bay.id, self.session_id)
+        return getattr(self, "_disk_ok_flag", True)
 
     def _record_event(self, sid, ev, frame):
         self._event_seq += 1

@@ -28,12 +28,16 @@ def register(db: Database, session_id: int | None, kind: str, path: str | Path) 
 
 
 def verify_session(db: Database, session_id: int) -> list[dict]:
-    """Re-hash every evidence file of a session. status: ok | modified | missing."""
+    """Re-hash every evidence file of a session. status: ok | modified | missing | removed.
+
+    ``removed``: the video was deleted on purpose by the storage cleanup (audited).
+    """
     out = []
+    purged = {r["path"] for r in db.q("SELECT path FROM evidence_purged")}
     for r in db.q("SELECT * FROM evidence_files WHERE session_id=? ORDER BY id", (session_id,)):
         p = Path(r["path"])
         if not p.exists():
-            st = "missing"
+            st = "removed" if str(p) in purged else "missing"
         else:
             st = "ok" if sha256_file(p) == r["sha256"] else "modified"
         out.append({"kind": r["kind"], "path": str(p), "sha256": r["sha256"], "status": st})
