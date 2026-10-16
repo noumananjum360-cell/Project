@@ -37,14 +37,6 @@ class UsersPage(QWidget):
         bb.addStretch(1)
         c.lay.addLayout(bb)
         lay.addWidget(c, 1)
-        r = Card("Roles")
-        lbl = QLabel(_("<b>Admin</b>: setup, cameras, models, users, settings, delete records.<br>"
-                       "<b>Supervisor</b>: approve mismatches with PIN, review low-confidence counts, adjust counts, products.<br>"
-                       "<b>Clerk</b>: run loading sessions, enter gate passes, view history and reports. "
-                       "Clerks cannot delete or change counted records."))
-        lbl.setWordWrap(True)
-        r.lay.addWidget(lbl)
-        lay.addWidget(r)
 
     def showEvent(self, e):
         super().showEvent(e)

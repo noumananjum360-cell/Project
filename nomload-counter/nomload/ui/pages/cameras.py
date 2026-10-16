@@ -195,9 +195,7 @@ class CalibrationDialog(QDialog):
         tools.addWidget(flip)
         tools.addWidget(clr)
         lay.addLayout(tools)
-        hint = QLabel(_("Draw the counting line across the truck entrance. The arrow must point INTO the truck. "
-                        "For polygons click the corners and double-click (or right-click) to finish. "
-                        "Ignore zones hide areas such as the stock pile or a walkway."))
+        hint = QLabel(_("Arrow must point into the truck. Double-click to finish a zone."))
         hint.setWordWrap(True)
         hint.setObjectName("Muted")
         lay.addWidget(hint)
@@ -452,15 +450,6 @@ class CamerasPage(QWidget):
         cc.lay.addWidget(self.lic)
         body.addWidget(cc, 5)
         lay.addLayout(body, 1)
-        help_c = Card("RTSP tips")
-        t = QLabel(_("Hikvision: rtsp://user:pass@IP:554/Streaming/Channels/101 (102 = sub-stream). "
-                     "Dahua / CP Plus: rtsp://user:pass@IP:554/cam/realmonitor?channel=1&subtype=0. "
-                     "Use the sub-stream on slower PCs. The PC and the camera/NVR must be on the same network. "
-                     "Place the counting camera high, looking down at the truck entrance."))
-        t.setWordWrap(True)
-        t.setObjectName("Muted")
-        help_c.lay.addWidget(t)
-        lay.addWidget(help_c)
 
     def showEvent(self, e):
         super().showEvent(e)

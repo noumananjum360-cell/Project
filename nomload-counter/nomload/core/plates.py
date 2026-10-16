@@ -209,9 +209,10 @@ def load_ocr(settings: dict | None = None):
 
 # --------------------------------------------------------------------------- reader
 class PlateReader:
-    def __init__(self, ocr=None, min_votes: int = 3):
+    def __init__(self, ocr=None, min_votes: int = 5, min_agreement: float = 0.6):
         self.ocr = ocr
         self.min_votes = min_votes
+        self.min_agreement = min_agreement
         self.votes: dict[str, list[PlateRead]] = {}
 
     def reset(self):
@@ -227,7 +228,8 @@ class PlateReader:
             cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
             if roi is None or (roi[0] <= cx <= roi[2] and roi[1] <= cy <= roi[3]):
                 bw, bh = b[2] - b[0], b[3] - b[1]
-                boxes.append((int(b[0] - bw * 0.04), int(b[1] - bh * 0.08), int(b[2] + bw * 0.04), int(b[3] + bh * 0.08)))
+                # generous margin: characters touching the crop edge are discarded by segmentation
+                boxes.append((int(b[0] - bw * 0.12), int(b[1] - bh * 0.18), int(b[2] + bw * 0.12), int(b[3] + bh * 0.18)))
         if not boxes:
             boxes = find_plate_candidates(frame, roi)
         H, W = frame.shape[:2]
@@ -263,8 +265,13 @@ class PlateReader:
         return PlateRead(text, top.raw, conf, top.province, top.box, top.crop, top.ts)
 
     def confident(self) -> bool:
+        """Accept only when one reading clearly dominates (avoids locking onto a cut-off read)."""
         b = self.best()
-        return bool(b and len(self.votes.get(b.text, [])) >= self.min_votes and b.confidence >= 0.6)
+        if not b:
+            return False
+        n = len(self.votes.get(b.text, []))
+        total = sum(len(v) for v in self.votes.values())
+        return n >= self.min_votes and n / total >= self.min_agreement and b.confidence >= 0.6
 
 
 def export_char_ocr_onnx(W1, b1, W2, b2, path: str):

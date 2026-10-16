@@ -18,6 +18,8 @@ Login ─► Live Bays ─► Start loading (gate pass) ─► camera counts eve
 
 ---
 
+**User manual (PDF with screenshots):** [`docs/NomLoad_Counter_User_Manual.pdf`](docs/NomLoad_Counter_User_Manual.pdf)
+
 ## Contents
 
 1. [Features](#features)
@@ -124,6 +126,7 @@ nomload-counter/
 │  └─ ui/                     PySide6 UI (login, main window, pages, dialogs, widgets, icons)
 ├─ models/                    starter_detector.onnx, plate_ocr.onnx
 ├─ samples/                   synthetic test videos, answer_key.csv, calibration.json, gate pass CSV
+├─ docs/                      NomLoad_Counter_User_Manual.pdf
 ├─ tools/                     keygen.py, generate_samples.py, train_starter.py, train_ocr.py,
 │                             evaluate.py, make_assets.py
 ├─ build/                     nomload.spec, keygen.spec, installer.iss, build_windows.bat
@@ -229,7 +232,8 @@ You can also import any YOLOv5, v8 or v11 detector exported with
 
 The command-line tools do the same jobs:
 `python tools/train_starter.py` (starter detector), `python tools/train_ocr.py` (plate OCR),
-`python tools/generate_samples.py` (test videos and answer key).
+`python tools/generate_samples.py` (test videos and answer key). The user manual is rebuilt from real
+screenshots with `tools/manual/seed_demo.py`, `tools/manual/screenshots.py` and `tools/manual/build_manual.py`.
 
 ---
 
@@ -403,8 +407,9 @@ scrolls instead of being cut off on 1366×768 gate PCs.
 
 *Settings → Performance*:
 
-* **Skip frames between analyses**: 1 analyses every 2nd frame, which suits 25 fps cameras. Use 2–3 on
-  slow PCs.
+* **Skip frames between analyses**: 0 (default) analyses every frame the PC can keep up with; frames
+  are dropped automatically when the PC is busy. Use 1–2 only on very slow PCs, because skipping frames
+  lowers counting accuracy for fast-moving items.
 * **Max processing width**: frames are downscaled before analysis (960 px default; 640 px is enough
   for most bays).
 * Use the camera **sub-stream** (e.g. 640×360 or 704×576) for counting. That is the single biggest saving.

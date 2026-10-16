@@ -124,10 +124,9 @@ class SettingsPage(QWidget):
         f.addRow(_("Inference threads (0 = auto)"), spin("inference_threads", 0, 32))
         gpu = check("use_gpu", "Use GPU (DirectML / CUDA) when available")
         provs = available_providers()
-        gpu_ok = any(p in provs for p in ("DmlExecutionProvider", "CUDAExecutionProvider"))
         f.addRow("", gpu)
         pl = QLabel(_("Available") + ": " + ", ".join(p.replace("ExecutionProvider", "") for p in provs) +
-                    ("" if gpu_ok else "  ·  " + _("install onnxruntime-directml for GPU")))
+                    "")
         pl.setObjectName("Muted")
         pl.setWordWrap(True)
         f.addRow("", pl)
@@ -151,7 +150,7 @@ class SettingsPage(QWidget):
         tb.clicked.connect(self.test_sound)
         f.addRow("", tb)
         # remote
-        cd, f = card("Remote alerts (sent when internet is available)", 3, 0, 2)
+        cd, f = card("Remote alerts", 3, 0, 2)
         ev = QGridLayout()
         self.ev_checks = {}
         chosen = set(s.get("remote_events") or [])
@@ -195,11 +194,6 @@ class SettingsPage(QWidget):
         f.addRow("", qh)
         # OCR
         cd, f = card("Number plate OCR", 4, 0)
-        o = QLabel(_("The built-in OCR is used by default. To use a PaddleOCR recognition model exported to ONNX, "
-                     "choose the model and its dictionary file."))
-        o.setWordWrap(True)
-        o.setObjectName("Muted")
-        f.addRow(o)
         f.addRow(_("PaddleOCR model (.onnx)"), self._file_row("paddle_rec_model", "ONNX (*.onnx)"))
         f.addRow(_("Dictionary (.txt)"), self._file_row("paddle_rec_dict", "Text (*.txt)"))
         # licence

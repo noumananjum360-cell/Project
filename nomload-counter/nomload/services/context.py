@@ -63,7 +63,7 @@ DEFAULT_SETTINGS = {
     "detector_conf": 0.35,
     "use_gpu": False,
     "inference_threads": 0,
-    "frame_skip": 1,                # process every (n+1)th frame
+    "frame_skip": 0,                # process every (n+1)th frame; raise on slow PCs
     "max_process_width": 960,
     "camera_offline_alert_s": 30,
     "tamper_enabled": True,

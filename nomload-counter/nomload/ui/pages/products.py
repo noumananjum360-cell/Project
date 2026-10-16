@@ -42,8 +42,7 @@ class ProductsPage(QWidget):
         self.cls.setEditable(True)
         self.units = QSpinBox()
         self.units.setRange(1, 1000)
-        self.units.setToolTip(_("How many units one detected item represents, e.g. a shrink pack of 12 bottles = 12, "
-                                "or 1 if the gate pass counts packs."))
+        self.units.setToolTip(_("Units counted for each detected item"))
         self.tol_u = QSpinBox()
         self.tol_u.setRange(-1, 10000)
         self.tol_u.setSpecialValueText(_("use global"))
@@ -64,12 +63,6 @@ class ProductsPage(QWidget):
         f.addRow(_("Notes"), self.notes)
         f.addRow("", self.active)
         fc.lay.addLayout(f)
-        hint = QLabel(_("Detector class is what the AI model recognises (bag, carton, crate, pack or a custom class "
-                        "trained in Training). If two products on one gate pass share a class, the clerk selects the "
-                        "product being loaded on the Live Bays screen."))
-        hint.setWordWrap(True)
-        hint.setObjectName("Muted")
-        fc.lay.addWidget(hint)
         sv = button("Save profile", "Primary", "check")
         sv.clicked.connect(self.save)
         fc.lay.addWidget(sv)

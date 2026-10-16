@@ -144,7 +144,10 @@ class VideoSource(threading.Thread):
             self._cond.notify_all()
 
     def offline_for(self) -> float:
-        return 0.0 if self.online or self.offline_since is None else time.time() - self.offline_since
+        since = self.offline_since  # read once: the reader thread may change it concurrently
+        if self.online or since is None:
+            return 0.0
+        return time.time() - since
 
     def read(self, last_id: int = -1, timeout: float = 1.0):
         """Wait for a frame newer than ``last_id``. Returns (frame_id, ts, frame) or None."""
@@ -182,6 +185,10 @@ class VideoSource(threading.Thread):
                             if not ok:
                                 break
                         else:
+                            if self.lockstep:  # let the consumer take the last frame first
+                                with self._cond:
+                                    while self._consumed < self._frame_id and not self._stop.is_set():
+                                        self._cond.wait(0.5)
                             self.ended = True
                             self._mark_offline("end of file")
                             cap.release()

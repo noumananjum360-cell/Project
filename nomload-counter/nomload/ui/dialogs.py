@@ -249,7 +249,6 @@ class GatePassPicker(Base):
     def __init__(self, parent, app, plate_hint: str = ""):
         super().__init__(parent, "Start loading", 760)
         self.app = app
-        self.lay.addWidget(QLabel(_("Select the gate pass for this truck, or create a new one.")))
         top = QHBoxLayout()
         self.search = QLineEdit()
         self.search.setPlaceholderText(_("Search gate pass, vehicle or customer"))
@@ -422,8 +421,8 @@ class SessionResultDialog(QDialog):
         banner.setAlignment(Qt.AlignmentFlag.AlignCenter)
         banner.setStyleSheet(f"background:{color}; color:white; font-size:54px; font-weight:800; padding:26px;")
         lay.addWidget(banner)
-        sub = QLabel((_("Quantities match the gate pass. The truck may leave.") if ok else
-                      _("Counted quantity does NOT match. Supervisor approval is required to release the truck.")))
+        sub = QLabel((_("Quantity matches. Truck may leave.") if ok else
+                      _("Quantity does not match. Supervisor approval required.")))
         sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         sub.setWordWrap(True)
         sub.setStyleSheet("font-size: 17px; padding: 10px 20px;")
@@ -521,7 +520,7 @@ class ChangePasswordDialog(Base):
         super().__init__(parent, "Change password", 440)
         self.app = app
         if forced:
-            m = QLabel(_("For security, please set a new password before continuing."))
+            m = QLabel(_("Please set a new password."))
             m.setWordWrap(True)
             self.lay.addWidget(m)
         f = QFormLayout()

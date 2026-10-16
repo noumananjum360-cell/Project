@@ -34,7 +34,6 @@ class ReportsPage(QWidget):
         g.setSpacing(14)
         # certificate
         c = Card("Truck loading certificate")
-        c.lay.addWidget(self._muted("PDF certificate for one truck: quantities, plate, snapshots and evidence hashes."))
         h = QHBoxLayout()
         self.cert_id = QSpinBox()
         self.cert_id.setRange(1, 10 ** 9)
@@ -47,7 +46,6 @@ class ReportsPage(QWidget):
         g.addWidget(c, 0, 0)
         # daily
         c = Card("Daily dispatch summary")
-        c.lay.addWidget(self._muted("Trucks, units per product and mismatches for one day."))
         h = QHBoxLayout()
         self.day = _date()
         b = button("Generate PDF", "Primary", "reports")
@@ -58,7 +56,6 @@ class ReportsPage(QWidget):
         g.addWidget(c, 0, 1)
         # mismatch
         c = Card("Mismatch report")
-        c.lay.addWidget(self._muted("All trucks with quantity differences and supervisor release reasons."))
         h = QHBoxLayout()
         self.m0, self.m1 = _date(30), _date()
         b = button("Generate PDF", "Primary", "reports")
@@ -70,7 +67,6 @@ class ReportsPage(QWidget):
         g.addWidget(c, 1, 0)
         # excel
         c = Card("Excel export")
-        c.lay.addWidget(self._muted("Sessions, product lines, every count event and alerts in one workbook."))
         h = QHBoxLayout()
         self.x0, self.x1 = _date(30), _date()
         b = button("Export .xlsx", "Primary", "download")
