@@ -62,6 +62,11 @@ def choose_providers(use_gpu: bool) -> list[str]:
     return order
 
 
+def max_threads() -> int:
+    """Never more AI threads than cores, and always one core left for the window."""
+    return max(1, (os.cpu_count() or 2) - 1)
+
+
 def default_threads() -> int:
     n = os.cpu_count() or 2
     return max(1, min(4, n // 2))
@@ -75,7 +80,7 @@ class OnnxDetector:
         so = ort.SessionOptions()
         # Leave cores for the window and the cameras: by default ONNX Runtime takes every
         # core and busy-spins between frames, which starves the UI ("Not responding").
-        so.intra_op_num_threads = int(threads) if threads else default_threads()
+        so.intra_op_num_threads = min(int(threads), max_threads()) if threads else default_threads()
         so.inter_op_num_threads = 1
         so.add_session_config_entry("session.intra_op.allow_spinning", "0")
         so.add_session_config_entry("session.inter_op.allow_spinning", "0")

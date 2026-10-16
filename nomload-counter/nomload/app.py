@@ -25,6 +25,9 @@ def run_gui() -> int:
     setup_logging()
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     qapp = QApplication(sys.argv)
+    from nomload.core.sysutil import disable_power_throttling, raise_ui_thread_priority
+    raise_ui_thread_priority()
+    disable_power_throttling()
     qapp.setApplicationName(APP_NAME)
     qapp.setOrganizationName(VENDOR)
     qapp.setWindowIcon(QIcon(str(assets_dir() / "app.ico")))

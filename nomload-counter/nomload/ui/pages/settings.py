@@ -122,7 +122,8 @@ class SettingsPage(QWidget):
         f.addRow(_("Frames analysed per second"), spin("max_process_fps", 4, 30, " fps"))
         f.addRow(_("Skip frames between analyses"), spin("frame_skip", 0, 10))
         f.addRow(_("Max processing width"), spin("max_process_width", 320, 1920, " px"))
-        f.addRow(_("Inference threads (0 = auto)"), spin("inference_threads", 0, 32))
+        from nomload.core.detector import max_threads
+        f.addRow(_("Inference threads (0 = auto)"), spin("inference_threads", 0, max_threads()))
         gpu = check("use_gpu", "Use GPU (DirectML / CUDA) when available")
         provs = available_providers()
         f.addRow("", gpu)

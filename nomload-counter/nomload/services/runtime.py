@@ -181,8 +181,6 @@ class BayRuntime(threading.Thread):
             self.status["message"] = "No counting camera configured for this bay"
             self.listener.frame(self.bay.id, None, dict(self.status))
             return
-        from nomload.core.sysutil import lower_thread_priority
-        lower_thread_priority()
         self.src.start()
         if self.plate_src:
             self.plate_src.start()

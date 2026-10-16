@@ -10,20 +10,50 @@ import traceback
 log = logging.getLogger(__name__)
 
 
-def lower_thread_priority():
-    """Run the calling worker thread below normal priority (Windows).
+def raise_ui_thread_priority():
+    """Give the window's thread priority over camera decoding and AI threads (Windows).
 
-    Camera decoding and AI counting then yield to the window, so the UI stays
-    responsive even when the CPU is fully used.
+    Raising the UI thread (rather than lowering the workers) avoids a worker holding
+    Python's interpreter lock being starved while the window waits for that lock.
     """
     if sys.platform != "win32":
         return
     try:
         import ctypes
         k = ctypes.windll.kernel32
-        k.SetThreadPriority(k.GetCurrentThread(), -1)  # THREAD_PRIORITY_BELOW_NORMAL
+        k.SetThreadPriority(k.GetCurrentThread(), 1)  # THREAD_PRIORITY_ABOVE_NORMAL
     except Exception:  # never fatal
         pass
+
+
+def disable_power_throttling():
+    """Opt out of Windows 11 power throttling (EcoQoS).
+
+    On Intel 12th-gen+ laptops Windows otherwise moves the app to the slow efficiency
+    cores at low clock speed (especially on battery), and the counting falls behind.
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class State(ctypes.Structure):
+            _fields_ = [("Version", wintypes.ULONG), ("ControlMask", wintypes.ULONG), ("StateMask", wintypes.ULONG)]
+
+        st = State(1, 0x1, 0)  # control EXECUTION_SPEED, state off = never throttle
+        k = ctypes.windll.kernel32
+        k.SetProcessInformation(k.GetCurrentProcess(), 4, ctypes.byref(st), ctypes.sizeof(st))  # ProcessPowerThrottling
+    except Exception:  # Windows 10 before 1709 etc.
+        pass
+
+
+def free_disk_gb(path) -> float:
+    import shutil
+    try:
+        return shutil.disk_usage(path).free / 1e9
+    except OSError:
+        return 999.0
 
 
 class UiWatchdog(threading.Thread):
