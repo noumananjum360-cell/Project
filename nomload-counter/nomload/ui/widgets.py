@@ -103,8 +103,10 @@ class Pill(QLabel):
 class BarChart(QWidget):
     """Simple, crisp bar chart in the style of the NomFabric dashboard."""
 
-    def __init__(self, parent=None, stacked_colors: list[str] | None = None, value_fmt="{:.0f}"):
+    def __init__(self, parent=None, stacked_colors: list[str] | None = None, value_fmt="{:.0f}",
+                 integer: bool = False):
         super().__init__(parent)
+        self.integer = integer
         self.labels: list[str] = []
         self.series: list[list[float]] = []
         self.colors = stacked_colors
@@ -131,6 +133,11 @@ class BarChart(QWidget):
             return
         vmax = max(totals)
         step = _nice_step(vmax)
+        if self.integer:
+            step = max(1.0, round(step))
+        fmt = self.value_fmt
+        if not self.integer and step < 1 and fmt == "{:.0f}":
+            fmt = "{:.1f}" if step >= 0.1 else "{:.2f}"
         top = step * int(np.ceil(vmax / step))
         left, right, tb, bb = 40, 10, 12, 40
         ch = h - tb - bb
@@ -145,12 +152,16 @@ class BarChart(QWidget):
             p.drawLine(QPointF(left, y), QPointF(w - right, y))
             p.setPen(muted)
             p.drawText(QRectF(0, y - 8, left - 6, 16), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-                       self.value_fmt.format(v))
+                       fmt.format(v))
             v += step
         n = len(self.labels)
         slot = cw / n
         bw = min(56.0, slot * 0.6)
         colors = self.colors or [theme.c("chart")]
+        # show every k-th x label so they never overlap
+        fm = p.fontMetrics()
+        widest = max((fm.horizontalAdvance(l) for l in self.labels), default=10) + 8
+        every = max(1, int(np.ceil(widest / max(slot, 1))))
         for i, lab in enumerate(self.labels):
             x = left + slot * i + (slot - bw) / 2
             base = tb + ch
@@ -164,9 +175,11 @@ class BarChart(QWidget):
                 p.drawRect(QRectF(x, base - bh, bw, bh))
                 base -= bh
             p.setPen(muted)
-            txt = lab if len(lab) <= 14 or slot > 110 else lab[:12] + "…"
-            p.drawText(QRectF(left + slot * i, tb + ch + 4, slot, 32), Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
-                       txt)
+            if i % every:
+                continue
+            txt = lab if len(lab) <= 14 or slot * every > 110 else lab[:12] + "…"
+            p.drawText(QRectF(left + slot * i - slot * (every - 1) / 2, tb + ch + 4, slot * every, 32),
+                       Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop, txt)
 
 
 def _nice_step(vmax: float) -> float:

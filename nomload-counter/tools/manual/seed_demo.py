@@ -101,7 +101,11 @@ if not s4.plate_text:
 # spread the sessions over recent days/hours for the dashboard
 day = 86400
 now = time.time()
-shift = {sid1: -2 * day - 3 * 3600, sid2: -1 * day - 5 * 3600, sid3: -2 * 3600, sid4: -1 * 3600}
+import datetime as _dt
+midnight = time.mktime(_dt.date.today().timetuple())
+# two trucks today, two on previous days
+shift = {sid1: -2 * day - 3 * 3600, sid2: -1 * day - 5 * 3600, sid3: -40 * 60 if now - midnight > 3600 else 0,
+         sid4: -10 * 60 if now - midnight > 1200 else 0}
 for sid, d in shift.items():
     app.db.execute("UPDATE sessions SET started_at=started_at+?, ended_at=ended_at+? WHERE id=?", (d, d, sid))
     app.db.execute("UPDATE count_events SET ts=ts+? WHERE session_id=?", (d, sid))

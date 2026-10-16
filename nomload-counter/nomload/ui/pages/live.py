@@ -50,7 +50,8 @@ class BayWidget(QFrame):
         self.fps.setObjectName("Muted")
         h.addWidget(self.fps)
         for pill in (self.cam_pill, self.truck_pill, self.tamper_pill):
-            pill.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+            pill.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+        name.setMinimumWidth(60)
         lay.addLayout(h)
         self.video = VideoView()
         self.video.double_clicked.connect(lambda: page.focus_bay(self))
@@ -134,8 +135,9 @@ class BayWidget(QFrame):
             lay.addWidget(self.video, 1)
             self.count_lbl.setStyleSheet("font-size: 36px;")
             self.exp_lbl.setStyleSheet(f"font-size: 22px; color: {theme.c('muted')}; font-weight: 600;")
-            self.status_lbl.setMinimumWidth(130)
+            self.status_lbl.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
             h.insertWidget(1, self.status_lbl)
+            self.fps.hide()  # shown as the camera badge tooltip in side-by-side mode
             info_row = QHBoxLayout()
             info_row.setSpacing(16)
             left = QVBoxLayout()
@@ -152,11 +154,9 @@ class BayWidget(QFrame):
             info_row.addLayout(right, 1)
             lay.addLayout(info_row)
             lay.addLayout(self.products_box)
-            btns = QHBoxLayout()
-            btns.addWidget(self.start_btn, 2)
-            btns.addWidget(self.close_btn, 2)
-            btns.addLayout(small, 3)
-            lay.addLayout(btns)
+            lay.addWidget(self.start_btn)
+            lay.addWidget(self.close_btn)
+            lay.addLayout(small)
             lay.addStretch(0)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.tick)
@@ -183,7 +183,7 @@ class BayWidget(QFrame):
             self.summary = None
             self.status_lbl.setText(_("IDLE") if self.page.compact else _("IDLE - no truck loading"))
             self.status_lbl.setStyleSheet(f"background:{theme.c('surface_alt')}; color:{theme.c('muted')}; "
-                                          "border-radius:8px; padding:6px; font-weight:700;")
+                                          "border-radius:8px; padding:4px 12px; font-weight:700;")
             self.count_lbl.setText("0")
             self.exp_lbl.setText("/ -")
             self.progress.setValue(0)
@@ -198,7 +198,7 @@ class BayWidget(QFrame):
         self.summary = s
         self.status_lbl.setText(_("LOADING") + (f"  ·  {_('auto-started')}" if s.auto_started else ""))
         self.status_lbl.setStyleSheet(f"background:{theme.c('primary')}; color:white; border-radius:8px; "
-                                      "padding:6px; font-weight:700;")
+                                      "padding:4px 12px; font-weight:700;")
         self.count_lbl.setText(str(s.total_counted))
         exp = s.total_expected if s.gate_pass else None
         self.exp_lbl.setText(f"/ {exp}" if exp is not None else "/ -")
@@ -268,11 +268,16 @@ class BayWidget(QFrame):
             self.cam_pill.set_state(_("Camera online"), "ok")
         else:
             self.cam_pill.set_state(_("Camera offline"), "bad")
+        if "truck" in status and status["truck"] != getattr(self, "_truck_shown", None):
+            self._truck_shown = status["truck"]
+            self.on_truck(status["truck"])
         t = status.get("tamper", "ok")
         self.tamper_pill.setVisible(t != "ok")
         if t != "ok":
             self.tamper_pill.set_state(f"⚠ {t}", "bad")
-        self.fps.setText(f"{status.get('fps', 0):.0f} fps · {status.get('infer_ms', 0):.0f} ms")
+        perf = f"{status.get('fps', 0):.0f} fps · {status.get('infer_ms', 0):.0f} ms"
+        self.fps.setText(perf)
+        self.cam_pill.setToolTip(perf)
 
     def on_count(self, ev):
         if ev.get("session_id") and ev["session_id"] == self.session_id:
@@ -419,6 +424,12 @@ class LiveBaysPage(QWidget):
             w.setVisible(w in ws)
         cols = self._columns(len(ws))
         self._cols = cols
+        for c in range(4):
+            self.grid.setColumnStretch(c, 1 if c < cols else 0)
+        for w in ws:
+            # equal columns that may shrink below their natural width instead of overflowing
+            w.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+            w.setMinimumWidth(360)
         rows = (len(ws) + cols - 1) // max(1, cols)
         avail = self.scroll.viewport().height()
         for i, w in enumerate(ws):
@@ -439,6 +450,13 @@ class LiveBaysPage(QWidget):
         super().resizeEvent(e)
         if self.widgets:
             self._layout()
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        # the page gets its real width only when shown: lay the bays out again
+        if self.widgets:
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(0, self._layout)
 
     def focus_bay(self, w):
         self.focused = None if (w is None or self.focused is w) else w

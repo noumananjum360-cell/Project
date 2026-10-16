@@ -229,7 +229,7 @@ class BayRuntime(threading.Thread):
 
     def _process(self, frame, ts, n):
         res = self.engine.process(frame, ts)
-        self.status.update(online=True, infer_ms=res.infer_ms, message="")
+        self.status.update(online=True, infer_ms=res.infer_ms, message="", truck=self.truck_present)
         # ---- tamper
         if self.tamper and ts - self._last_tamper_check > 1.0:
             self._last_tamper_check = ts
@@ -240,6 +240,7 @@ class BayRuntime(threading.Thread):
                     self.app.alerts.raise_alert("tamper", f"{self.bay.name}: {tr.detail}", self.bay.id, self.session_id)
         # ---- truck presence
         self._truck_logic(res.truck_present, ts)
+        self.status["truck"] = self.truck_present
         # ---- counts
         with self._lock:
             sid = self.session_id

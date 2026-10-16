@@ -67,7 +67,7 @@ def s_dash():
         t.deleteLater()
     W.go("dashboard"); W.pages["dashboard"].refresh(); save(W, "03_dashboard")
 
-@step(200)
+@step(28000)
 def s_live_start():
     P = {p.name: p.id for p in app.products.list()}
     g8 = app.gate_passes.create(app.user, "GP-1008", [(P["Carton 1.5L x6"], 40), (P["Shrink pack 500ml x12"], 32)],
@@ -77,16 +77,16 @@ def s_live_start():
     app.runtimes[b2].start_session(app.user, g8)
     W.go("live")
 
-@step(14000)
+@step(400)
 def s_live():
     save(W, "04_live_bays")
 
-@step(600)
+@step(3000)
 def s_live_focus():
     lp = W.pages["live"]
     lp.focus_bay(list(lp.widgets.values())[0])
 
-@step(3000)
+@step(400)
 def s_live_focus_shot():
     save(W, "05_live_single_bay")
     lp = W.pages["live"]; lp.focus_bay(None)
@@ -213,21 +213,21 @@ def s_alerts():
     show_dialog(D.AlertsDialog(W, app), "33_alerts", 1000, 620)
     show_dialog(D.ChangePasswordDialog(W, app), "34_change_password")
 
-@step()
+@step(5000)
 def s_dark():
     W.toggle_theme(); W.go("live")
 
-@step(5000)
+@step(400)
 def s_dark_shot():
     save(W, "35_dark_live")
     W.go("dashboard"); W.pages["dashboard"].refresh(); save(W, "36_dark_dashboard")
     W.toggle_theme()
 
-@step()
+@step(5000)
 def s_compact():
     W.resize(1366, 768); W.go("live")
 
-@step(4000)
+@step(400)
 def s_compact_shot():
     save(W, "37_live_1366")
 

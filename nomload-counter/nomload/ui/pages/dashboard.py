@@ -45,10 +45,10 @@ class DashboardPage(QWidget):
         g = QGridLayout()
         g.setSpacing(14)
         c1 = Card("Units dispatched per product (today)")
-        self.ch_products = BarChart()
+        self.ch_products = BarChart(integer=True)
         c1.lay.addWidget(self.ch_products)
         c2 = Card("Trucks per day (last 14 days)")
-        self.ch_days = BarChart(stacked_colors=[theme.c("chart_soft"), theme.c("danger")])
+        self.ch_days = BarChart(stacked_colors=[theme.c("chart_soft"), theme.c("danger")], integer=True)
         legend = QLabel(f"<span style='color:{theme.c('chart_soft')}'>■</span> {_('cleared')} &nbsp; "
                         f"<span style='color:{theme.c('danger')}'>■</span> {_('mismatch')}")
         legend.setObjectName("Muted")
@@ -58,7 +58,7 @@ class DashboardPage(QWidget):
         self.ch_bays = BarChart()
         c3.lay.addWidget(self.ch_bays)
         c4 = Card("Busiest hours (trucks started, 7 days)")
-        self.ch_hours = BarChart()
+        self.ch_hours = BarChart(integer=True)
         c4.lay.addWidget(self.ch_hours)
         self.chart_grid = g
         self.chart_cards = [c1, c2, c3, c4]
@@ -107,8 +107,8 @@ class DashboardPage(QWidget):
         self.k_trucks.set(t["trucks"])
         self.k_units.set(f"{t['units_total']:,}")
         self.k_mism.set(t["mismatches"], theme.c("danger") if t["mismatches"] else None)
-        m = t["avg_load_s"] / 60
-        self.k_avg.set(f"{m:.0f} min" if t["avg_load_s"] else "-")
+        a = t["avg_load_s"]
+        self.k_avg.set("-" if not a else (f"{a:.0f} s" if a < 60 else f"{a / 60:.0f} min"))
         self.k_active.set(t["active"])
         names = [n for n, _v in t["units_by_product"]]
         self.ch_products.set_data(names, [v for _n, v in t["units_by_product"]])
