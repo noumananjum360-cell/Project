@@ -380,11 +380,11 @@ analysed):
 | Sample video | Scene | True net count | Counted | Accuracy |
 |---|---|---|---|---|
 | flour_mill_bay.mp4 | bags on head / shoulder / back, pauses on the line, one bag carried back | 25 | 24 | 96.0 % |
-| fmcg_cartons_bay.mp4 | stacked cartons in arms, trolleys with 4-6 shrink packs | 72 | 70 | 97.2 % |
-| beverage_conveyor_bay.mp4 | belt conveyor + crates/cartons in arms and on trolleys | 90 | 80 | 88.9 % |
-| mixed_busy_bay.mp4 | crowded: several labourers crossing together, mixed products | 52 | 52 | 92.3 % |
+| fmcg_cartons_bay.mp4 | stacked cartons in arms, trolleys with 4-6 shrink packs | 72 | 73 | 98.6 % |
+| beverage_conveyor_bay.mp4 | belt conveyor + crates/cartons in arms and on trolleys | 90 | 86 | 93.3 % |
+| mixed_busy_bay.mp4 | crowded: several labourers crossing together, mixed products | 52 | 50 | 96.2 % |
 
-Overall: 239 items, 17 counting errors (92.9 %). About 3 % of counts were flagged for supervisor review (mostly items that appeared from behind a
+Overall: 239 items, 10 counting errors (95.8 %). About 3 % of counts were flagged for supervisor review (mostly items that appeared from behind a
 labourer right on the line). Processing ran at 150-180 frames/s per video on a 4-core CPU
 (about 4 ms per inference), far above the 15-25 fps a camera delivers.
 The weakest case is cartons tightly stacked on trolleys; site training improves it most.
