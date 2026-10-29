@@ -1,0 +1,62 @@
+[
+ [
+  "intro",
+  "Every day, thousands of bags and cartons leave your factory gate. But do you know exactly how many went onto each truck?"
+ ],
+ [
+  "problem",
+  "Manual tally sheets are slow, tiring and easy to get wrong. A few bags short on every truck quickly adds up to real losses, and to endless disputes with distributors."
+ ],
+ [
+  "brand",
+  "Introducing NomLoad Counter, by Devnom. It turns the CCTV cameras you already have into an automatic, intelligent loading counter."
+ ],
+ [
+  "how",
+  "The clerk selects the gate pass and starts loading. NomLoad counts every bag and carton as it crosses into the truck, and subtracts any item carried back out."
+ ],
+ [
+  "live",
+  "Bags on the head or shoulder, cartons stacked in the arms, hand trolleys and conveyors. Each item is tracked and counted once, even when labourers stop on the line or cross together."
+ ],
+ [
+  "plate",
+  "At the same time, the truck's number plate is read automatically and matched with its gate pass."
+ ],
+ [
+  "result",
+  "When loading is finished, one click compares the count with the invoice. Cleared trucks may leave. If the quantity does not match, a loud alarm sounds, and the truck stays on hold until a supervisor releases it with a PIN and a written reason."
+ ],
+ [
+  "evidence",
+  "Every truck is recorded: the full loading video, a photo of each counted item, and the number plate, all protected with a digital fingerprint. One click exports an evidence pack to settle any dispute."
+ ],
+ [
+  "history",
+  "Every session is saved in history, searchable by date, truck or gate pass, so any complaint can be answered in seconds, with the proof right there."
+ ],
+ [
+  "dash",
+  "The dashboard shows trucks loaded, units dispatched and mismatches at a glance, with printed loading certificates, daily dispatch reports and Excel exports."
+ ],
+ [
+  "train",
+  "Every factory's products look different, so the built-in training wizard teaches NomLoad your own bags and cartons, using footage from your own cameras."
+ ],
+ [
+  "setup",
+  "Setting up is simple. Add your IP cameras, draw the counting line at the truck door, and NomLoad is ready to count."
+ ],
+ [
+  "offline",
+  "NomLoad works completely offline on an ordinary office computer. It supports Hikvision, Dahua and other IP cameras, and sends WhatsApp, email or SMS alerts to the owner whenever the internet is available."
+ ],
+ [
+  "secure",
+  "Clerks, supervisors and admins each get their own access, and every action is saved in a tamper-proof audit log."
+ ],
+ [
+  "outro",
+  "NomLoad Counter. Count every bag. Clear every truck. Contact Devnom today for a free demonstration."
+ ]
+]

@@ -1,0 +1,46 @@
+{
+  "_comment": "NomLoad Counter brand theme. Change colours here only - every screen, chart and report reads them.",
+  "brand": {
+    "primary": "#1B2A4E",
+    "primary_hover": "#26386A",
+    "accent": "#E8A33D",
+    "accent_soft": "#FBEFD9",
+    "success": "#1F9D55",
+    "success_soft": "#E3F4EA",
+    "danger": "#D64545",
+    "danger_soft": "#FBE6E6",
+    "warning": "#E8A33D",
+    "info": "#3E5A94"
+  },
+  "light": {
+    "bg": "#F8F9FB",
+    "sidebar": "#F2F4F7",
+    "surface": "#FFFFFF",
+    "surface_alt": "#F5F7FB",
+    "border": "#E3E6EC",
+    "text": "#1A1F2E",
+    "muted": "#5A6475",
+    "nav_hover": "#E9EDF4",
+    "nav_active": "#E2E8F3",
+    "chart": "#3A5A9B",
+    "chart_soft": "#98A3C2",
+    "input": "#FFFFFF",
+    "video_bg": "#0F1626"
+  },
+  "dark": {
+    "bg": "#0F1626",
+    "sidebar": "#131C30",
+    "surface": "#18233B",
+    "surface_alt": "#1D2A45",
+    "border": "#2A3856",
+    "text": "#E8ECF4",
+    "muted": "#9AA5BC",
+    "nav_hover": "#1E2B48",
+    "nav_active": "#25365A",
+    "chart": "#6F8FD6",
+    "chart_soft": "#4A5B82",
+    "input": "#131C30",
+    "video_bg": "#070B14"
+  },
+  "font": {"family": "Segoe UI", "fallback": "Inter, Arial", "base_px": 14, "title_px": 28}
+}
