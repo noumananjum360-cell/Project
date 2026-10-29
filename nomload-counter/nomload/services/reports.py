@@ -143,8 +143,9 @@ def _styles():
 
 
 class _Doc:
-    def __init__(self, path, title: str, company: dict, watermark: bool):
+    def __init__(self, path, title: str, company: dict, watermark: bool, landscape: bool = False):
         from reportlab.lib.pagesizes import A4
+        from reportlab.lib.pagesizes import landscape as _land
         from reportlab.lib.units import mm
         from reportlab.platypus import SimpleDocTemplate
         self.path = str(path)
@@ -152,7 +153,8 @@ class _Doc:
         self.company = company
         self.watermark = watermark
         self.mm = mm
-        self.doc = SimpleDocTemplate(self.path, pagesize=A4, leftMargin=16 * mm, rightMargin=16 * mm,
+        self.pagesize = _land(A4) if landscape else A4
+        self.doc = SimpleDocTemplate(self.path, pagesize=self.pagesize, leftMargin=16 * mm, rightMargin=16 * mm,
                                      topMargin=34 * mm, bottomMargin=18 * mm, title=title,
                                      author=company.get("name", ""), creator=f"{APP_NAME} {__version__}")
 
@@ -160,7 +162,7 @@ class _Doc:
         from reportlab.lib.colors import HexColor
         from reportlab.lib.pagesizes import A4
         mm = self.mm
-        w, h = A4
+        w, h = self.pagesize
         c.saveState()
         logo = self.company.get("logo")
         x = 16 * mm
@@ -215,10 +217,27 @@ class _Doc:
         return Path(self.path)
 
 
-def _table(rows, widths, header=True, zebra=True, align_right_from: int | None = None):
+def _table(rows, widths, header=True, zebra=True, align_right_from: int | None = None, extra_style=None):
+    """Report table. Text cells wrap inside their column (long names never run into the next column)."""
     from reportlab.lib.colors import HexColor
-    from reportlab.platypus import Table, TableStyle
-    t = Table(rows, colWidths=widths, repeatRows=1 if header else 0)
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.platypus import Paragraph, Table, TableStyle
+    from xml.sax.saxutils import escape
+    cell = ParagraphStyle("TCell", fontName="Helvetica", fontSize=9, leading=11)
+    cell_r = ParagraphStyle("TCellR", parent=cell, alignment=2)
+    head = ParagraphStyle("THead", parent=cell, fontName="Helvetica-Bold", textColor=HexColor("#FFFFFF"))
+    head_r = ParagraphStyle("THeadR", parent=head, alignment=2)
+    wrapped = []
+    for i, row in enumerate(rows):
+        out = []
+        for j, v in enumerate(row):
+            if isinstance(v, str):
+                right = align_right_from is not None and j >= align_right_from
+                st = (head_r if right else head) if (header and i == 0) else (cell_r if right else cell)
+                v = Paragraph(escape(v), st)
+            out.append(v)
+        wrapped.append(out)
+    t = Table(wrapped, colWidths=widths, repeatRows=1 if header else 0)
     st = [("FONT", (0, 0), (-1, -1), "Helvetica", 9), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
           ("BOTTOMPADDING", (0, 0), (-1, -1), 5), ("TOPPADDING", (0, 0), (-1, -1), 5),
           ("LINEBELOW", (0, 0), (-1, -1), 0.25, HexColor("#E3E6EC"))]
@@ -231,7 +250,7 @@ def _table(rows, widths, header=True, zebra=True, align_right_from: int | None =
                 st.append(("BACKGROUND", (0, i), (-1, i), HexColor("#F5F7FB")))
     if align_right_from is not None:
         st.append(("ALIGN", (align_right_from, 0), (-1, -1), "RIGHT"))
-    t.setStyle(TableStyle(st))
+    t.setStyle(TableStyle(st + list(extra_style or [])))
     return t
 
 
@@ -355,27 +374,74 @@ class ReportService:
 
     # ------------------------------------------------------------------ mismatch report
     def mismatch_report(self, d0: dt.date, d1: dt.date, out: str | Path) -> Path:
+        from reportlab.lib.colors import HexColor
         from reportlab.platypus import Paragraph, Spacer
         ss = _styles()
         mm = 2.8346
         t0, _ = day_bounds(d0)
         _, t1 = day_bounds(d1)
-        rows_s = [r for r in self.sessions.search(t0, t1) if r["status"] in ("mismatch", "released")]
-        story = [Paragraph(f"Mismatch Report - {d0.strftime('%d %b %Y')} to {d1.strftime('%d %b %Y')}", ss["H1x"]),
-                 Paragraph(f"{len(rows_s)} truck(s) where the counted quantity did not match the gate pass.", ss["Small"]),
-                 Spacer(1, 8)]
-        rows = [["#", "Date/time", "Bay", "Gate pass", "Vehicle", "Product differences", "Status / reason"]]
-        for r in sorted(rows_s, key=lambda r: r["started_at"]):
-            s = self.sessions.summary(r["id"])
-            diffs = "<br/>".join(f"{l.name}: {l.counted}/{l.expected if l.expected is not None else '-'} ({l.diff:+d})"
-                                 for l in s.lines if not l.ok)
-            reason = (f"Released by {s.released_by}: {s.release_reason}" if s.status == "released" else "Not released")
-            rows.append([str(s.id), fmt_ts(s.started_at)[:17], s.bay_name, s.gate_pass.number if s.gate_pass else "-",
-                         s.plate_text or "-", Paragraph(diffs or "-", ss["Cell"]), Paragraph(reason, ss["Cell"])])
-        story.append(_table(rows, [10 * mm, 28 * mm, 16 * mm, 20 * mm, 20 * mm, 44 * mm, 40 * mm]))
-        return _Doc(out, "Mismatch Report", self._company(), self._wm()).build(story)
+        rows_s = sorted([r for r in self.sessions.search(t0, t1) if r["status"] in ("mismatch", "released")],
+                        key=lambda r: r["started_at"])
+        sums = [self.sessions.summary(r["id"]) for r in rows_s]
+        period = d0.strftime("%d %b %Y") if d0 == d1 else f"{d0.strftime('%d %b %Y')} to {d1.strftime('%d %b %Y')}"
+        story = [Paragraph(f"Mismatch Report - {period}", ss["H1x"]), Spacer(1, 6)]
+        # ---- summary
+        short = sum(-l.diff for s in sums for l in s.lines if not l.ok and l.expected is not None and l.diff < 0)
+        over = sum(l.diff for s in sums for l in s.lines if not l.ok and l.expected is not None and l.diff > 0)
+        released = sum(1 for s in sums if s.status == "released")
+        kpi = [["Trucks with mismatch", "Units short", "Units extra", "Released by supervisor"],
+               [str(len(sums)), str(short), str(over), str(released)]]
+        story += [_table(kpi, [66 * mm] * 4, zebra=False), Spacer(1, 10)]
+        if not sums:
+            story.append(Paragraph("No mismatches in this period.", ss["Normal"]))
+            return _Doc(out, "Mismatch Report", self._company(), self._wm(), landscape=True).build(story)
+        per_prod: dict[str, list[int]] = {}
+        for s in sums:
+            for l in s.lines:
+                if not l.ok and l.expected is not None:
+                    d = per_prod.setdefault(l.name, [0, 0, 0])
+                    d[0] += 1
+                    d[1 if l.diff < 0 else 2] += abs(l.diff)
+        if per_prod:
+            story += [Paragraph("<b>By product</b>", ss["Normal"]), Spacer(1, 4)]
+            story.append(_table([["Product", "Trucks", "Units short", "Units extra"]] +
+                                [[k, str(v[0]), str(v[1]), str(v[2])] for k, v in sorted(per_prod.items())],
+                                [130 * mm, 45 * mm, 45 * mm, 45 * mm], align_right_from=1))
+            story.append(Spacer(1, 10))
+        # ---- details: one row per product that did not match
+        story += [Paragraph("<b>Trucks</b>", ss["Normal"]), Spacer(1, 4)]
+        rows = [["#", "Date / time", "Bay", "Gate pass", "Vehicle", "Product", "Expected", "Loaded", "Difference",
+                 "Status"]]
+        style, zebra_i = [], 0
+        for s in sums:
+            bad = [l for l in s.lines if not l.ok] or [None]
+            status = f"Released by {s.released_by}: {s.release_reason}" if s.status == "released" else "Not released"
+            first = len(rows)
+            for k, l in enumerate(bad):
+                rows.append([str(s.id) if k == 0 else "", fmt_ts(s.started_at)[:17] if k == 0 else "",
+                             s.bay_name if k == 0 else "", (s.gate_pass.number if s.gate_pass else "-") if k == 0 else "",
+                             (s.plate_text or "-") if k == 0 else "",
+                             l.name if l else "No gate pass linked",
+                             "-" if l is None or l.expected is None else str(l.expected),
+                             str(l.counted) if l else "-",
+                             f"{l.diff:+d}" if l is not None and l.expected is not None else "-",
+                             status if k == 0 else ""])
+                if l is not None and l.expected is not None:
+                    style.append(("TEXTCOLOR", (8, len(rows) - 1), (8, len(rows) - 1),
+                                  HexColor("#D64545") if l.diff < 0 else HexColor("#9A6511")))
+            last = len(rows) - 1
+            if last > first:   # one truck = one block
+                for col in (0, 1, 2, 3, 4, 9):
+                    style.append(("SPAN", (col, first), (col, last)))
+                style.append(("VALIGN", (0, first), (-1, last), "TOP"))
+            if zebra_i % 2:
+                style.append(("BACKGROUND", (0, first), (-1, last), HexColor("#F5F7FB")))
+            style.append(("LINEBELOW", (0, last), (-1, last), 0.8, HexColor("#C9CFDA")))
+            zebra_i += 1
+        story.append(_table(rows, [10 * mm, 30 * mm, 26 * mm, 26 * mm, 24 * mm, 48 * mm, 18 * mm, 17 * mm, 20 * mm,
+                                   46 * mm], zebra=False, extra_style=style))
+        return _Doc(out, "Mismatch Report", self._company(), self._wm(), landscape=True).build(story)
 
-    # ------------------------------------------------------------------ excel
     def export_excel(self, d0: dt.date, d1: dt.date, out: str | Path) -> Path:
         from openpyxl import Workbook
         from openpyxl.styles import Font, PatternFill
