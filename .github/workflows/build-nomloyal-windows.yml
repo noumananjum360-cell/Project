@@ -1,0 +1,43 @@
+name: Build NomLoyal for Windows
+
+on:
+  push:
+    paths:
+      - "nomloyal/**"
+      - ".github/workflows/build-nomloyal-windows.yml"
+  workflow_dispatch:
+
+jobs:
+  windows-exe:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run build.bat (tests + PyInstaller + self-test of the exe)
+        shell: cmd
+        working-directory: nomloyal
+        env:
+          CI: "true"
+        run: call build.bat
+
+      - name: Show build log
+        if: always()
+        shell: cmd
+        working-directory: nomloyal
+        run: type build_log.txt
+
+      - name: Zip the program
+        shell: pwsh
+        working-directory: nomloyal
+        run: Compress-Archive -Path dist\NomLoyal -DestinationPath NomLoyal-Windows.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NomLoyal-Windows
+          path: nomloyal/NomLoyal-Windows.zip
+          retention-days: 30
