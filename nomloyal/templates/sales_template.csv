@@ -1,0 +1,2 @@
+receipt_no,sold_at,customer_loyalty_id,customer_phone,sku,qty,unit_price,line_discount,payment_method,reported_total
+POS-10001,2026-10-01 14:30,,0300-1234567,SAR-001,1,18500,0,Card,18500
